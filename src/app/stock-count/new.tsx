@@ -125,7 +125,7 @@ export default function NewStockCountScreen() {
               <Ionicons
                 name={inStockOnly ? 'checkbox' : 'square-outline'}
                 size={24}
-                color={inStockOnly ? BRAND : theme.textSecondary}
+                color={inStockOnly ? theme.tint : theme.textSecondary}
               />
             </ThemedView>
           </Pressable>

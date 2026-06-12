@@ -1,11 +1,10 @@
-import * as SecureStore from 'expo-secure-store';
 import { createContext, use, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
-import { Platform } from 'react-native';
 
 import { login, logout, type ApiBranch } from '@/api/auth';
 import { setUnauthorizedHandler } from '@/api/client';
 import { isApiConfigured } from '@/api/config';
 import { BRANCHES, type Branch } from '@/constants/branches';
+import { storage } from '@/lib/storage';
 
 const SESSION_KEY = 'moptic.session';
 
@@ -37,25 +36,6 @@ function toBranch(branch: ApiBranch): Branch {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-/**
- * SecureStore is unavailable on web, so fall back to localStorage there.
- * Keeps the same async surface so callers don't need to branch.
- */
-const storage = {
-  async getItem(key: string) {
-    if (Platform.OS === 'web') return globalThis.localStorage?.getItem(key) ?? null;
-    return SecureStore.getItemAsync(key);
-  },
-  async setItem(key: string, value: string) {
-    if (Platform.OS === 'web') return void globalThis.localStorage?.setItem(key, value);
-    return SecureStore.setItemAsync(key, value);
-  },
-  async removeItem(key: string) {
-    if (Platform.OS === 'web') return void globalThis.localStorage?.removeItem(key);
-    return SecureStore.deleteItemAsync(key);
-  },
-};
 
 /**
  * Mock authentication. Swap the body of `signIn` for a real API call when a

@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Skeleton, SkeletonRows } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -15,7 +16,6 @@ import {
   type TransferItem,
 } from '@/data/transfers';
 
-const BRAND = '#232843';
 const GREEN = '#30A46C';
 const DANGER = '#e5484d';
 
@@ -49,8 +49,10 @@ export function TransferDetailsSheet({
           <ThemedView style={styles.handle} type="backgroundSelected" />
 
           {loading && !transfer ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={BRAND} />
+            <View style={styles.skeleton}>
+              <Skeleton width="50%" height={20} />
+              <Skeleton width="100%" height={72} radius={Spacing.three} />
+              <SkeletonRows count={4} />
             </View>
           ) : transfer && meta ? (
             <>
@@ -169,7 +171,7 @@ function ItemRow({
         </ThemedText>
       </View>
       <View style={styles.qtyPill}>
-        <ThemedText type="smallBold" style={{ color: BRAND }}>
+        <ThemedText type="smallBold" style={{ color: theme.tint }}>
           ×{item.qty}
         </ThemedText>
       </View>
@@ -197,10 +199,9 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
   },
-  loading: {
-    paddingVertical: Spacing.six,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: Spacing.three,
+    gap: Spacing.three,
   },
   titleRow: {
     flexDirection: 'row',

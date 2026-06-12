@@ -29,6 +29,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatMoney } from '@/data/inventory';
+import { SkeletonList } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -295,9 +296,7 @@ export default function StockCountDetailScreen() {
           )}
           ListEmptyComponent={
             loading ? (
-              <View style={styles.center}>
-                <ActivityIndicator color={BRAND} />
-              </View>
+              <SkeletonList />
             ) : (
               <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
                 {error ?? 'No items.'}
@@ -320,13 +319,13 @@ export default function StockCountDetailScreen() {
               disabled={!canSave}
               style={({ pressed }) => [
                 styles.saveBtn,
-                { borderColor: BRAND },
+                { borderColor: theme.tint },
                 (pressed || !canSave) && styles.pressed,
               ]}>
               {saving ? (
-                <ActivityIndicator color={BRAND} />
+                <ActivityIndicator color={theme.tint} />
               ) : (
-                <ThemedText style={[styles.saveText, { color: BRAND }]}>
+                <ThemedText style={[styles.saveText, { color: theme.tint }]}>
                   {pending.length > 0 ? `Save (${pending.length})` : 'Save'}
                 </ThemedText>
               )}

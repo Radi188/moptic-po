@@ -9,7 +9,6 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMoney } from '@/data/purchase-orders';
 
-const BRAND = '#232843';
 
 type PickerProduct = { code: string; name: string; cost: number };
 
@@ -52,7 +51,7 @@ export function ItemPickerSheet<T extends PickerProduct>({
               Choose Items
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={Spacing.two}>
-              <ThemedText type="smallBold" style={{ color: BRAND }}>
+              <ThemedText type="smallBold" style={{ color: theme.tint }}>
                 Done
               </ThemedText>
             </Pressable>
@@ -97,7 +96,7 @@ export function ItemPickerSheet<T extends PickerProduct>({
                     <Ionicons
                       name={added ? 'checkmark-circle' : 'add-circle-outline'}
                       size={24}
-                      color={added ? '#30A46C' : BRAND}
+                      color={added ? '#30A46C' : theme.tint}
                     />
                   </ThemedView>
                 </Pressable>

@@ -477,13 +477,14 @@ function ReadOnlyField({
   accent?: boolean;
   style?: object;
 }) {
+  const theme = useTheme();
   return (
     <View style={[styles.fieldGroup, style]}>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
       <ThemedView type="backgroundElement" style={styles.input}>
-        <ThemedText type="smallBold" style={[styles.readonlyValue, accent && { color: BRAND }]}>
+        <ThemedText type="smallBold" style={[styles.readonlyValue, accent && { color: theme.tint }]}>
           {value}
         </ThemedText>
       </ThemedView>
@@ -587,7 +588,7 @@ function DetailRow({
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" style={accent ? { color: BRAND } : undefined}>
+      <ThemedText type="smallBold" style={accent ? { color: theme.tint } : undefined}>
         {value}
       </ThemedText>
     </View>

@@ -25,6 +25,7 @@ import { TransferDetailsSheet } from '@/components/transfer-details-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { SkeletonList } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import {
   formatDateTime,
@@ -211,9 +212,7 @@ export default function TransfersScreen() {
         )}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
               {error ?? 'No stock transfers match your filters.'}

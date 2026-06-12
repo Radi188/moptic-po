@@ -26,6 +26,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
+import { SkeletonList } from "@/components/skeleton";
 import { useTheme } from "@/hooks/use-theme";
 
 const BRAND = "#232843";
@@ -302,7 +303,7 @@ export default function StockAdjustmentListScreen() {
                     {datePicker === "from" ? "Date From" : "Date To"}
                   </ThemedText>
                   <Pressable onPress={confirmDate} hitSlop={Spacing.two}>
-                    <ThemedText type="smallBold" style={{ color: BRAND }}>
+                    <ThemedText type="smallBold" style={{ color: theme.tint }}>
                       Done
                     </ThemedText>
                   </Pressable>
@@ -312,7 +313,7 @@ export default function StockAdjustmentListScreen() {
                   mode="date"
                   display="inline"
                   themeVariant={
-                    theme.background === "#000000" ? "dark" : "light"
+                    theme.background !== "#ffffff" ? "dark" : "light"
                   }
                   onChange={(_event, selectedDate) => {
                     if (selectedDate) setTempDate(selectedDate);
@@ -336,7 +337,7 @@ export default function StockAdjustmentListScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={theme.textSecondary}
-            colors={[BRAND]}
+            colors={[theme.tint]}
           />
         }
         renderItem={({ item }) => (
@@ -348,9 +349,7 @@ export default function StockAdjustmentListScreen() {
         )}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : (
             <ThemedText
               type="small"

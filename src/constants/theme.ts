@@ -14,13 +14,21 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    // Primary accent for icons, checkmarks, spinners and active states.
+    tint: '#232843',
+    // Soft accent used as the background behind tinted icon tiles.
+    tintSoft: 'rgba(35,40,67,0.08)',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    // A soft dark gray (not pure black) so cards and elements stay legible.
+    text: '#ECEDEE',
+    background: '#17191C',
+    backgroundElement: '#212429',
+    backgroundSelected: '#2C3038',
+    textSecondary: '#9BA1A6',
+    // A lighter periwinkle so the brand accent stays visible on dark gray.
+    tint: '#AEB7E8',
+    tintSoft: 'rgba(174,183,232,0.16)',
   },
 } as const;
 

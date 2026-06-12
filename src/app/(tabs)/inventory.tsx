@@ -13,6 +13,7 @@ import { ProductDetailsSheet } from '@/components/product-details-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { SkeletonList } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteProduct, formatMoney, type InventoryProduct } from '@/data/inventory';
 
@@ -145,9 +146,7 @@ export default function InventoryScreen() {
         )}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
               {error ?? 'No products found.'}
@@ -194,11 +193,11 @@ function ProductCard({
       style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView type="backgroundElement" style={styles.card}>
         <View style={styles.cardRow}>
-          <View style={[styles.iconTile, { backgroundColor: `${BRAND}1A` }]}>
+          <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
             {product.thumbnail ? (
               <Image source={{ uri: product.thumbnail }} style={styles.iconTileImage} contentFit="cover" />
             ) : (
-              <Ionicons name="cube-outline" size={22} color={BRAND} />
+              <Ionicons name="cube-outline" size={22} color={theme.tint} />
             )}
           </View>
           <View style={styles.cardMain}>

@@ -31,6 +31,7 @@ import {
   type PurchaseOrder,
 } from '@/data/purchase-orders';
 import { STATUS_META as TRANSFER_STATUS, type StockTransfer } from '@/data/transfers';
+import { SkeletonList, SkeletonStatGrid } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -195,7 +196,7 @@ export default function StockReportScreen() {
                       setDatePicker(null);
                     }}
                     hitSlop={Spacing.two}>
-                    <ThemedText type="smallBold" style={{ color: BRAND }}>
+                    <ThemedText type="smallBold" style={{ color: theme.tint }}>
                       Done
                     </ThemedText>
                   </Pressable>
@@ -204,7 +205,7 @@ export default function StockReportScreen() {
                   value={tempDate}
                   mode="date"
                   display="inline"
-                  themeVariant={theme.background === '#000000' ? 'dark' : 'light'}
+                  themeVariant={theme.background !== '#ffffff' ? 'dark' : 'light'}
                   onChange={(_e, selected) => {
                     if (selected) setTempDate(selected);
                   }}
@@ -216,8 +217,9 @@ export default function StockReportScreen() {
       )}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={BRAND} />
+        <View style={{ paddingHorizontal: Spacing.four, paddingTop: Spacing.three, gap: Spacing.three }}>
+          <SkeletonStatGrid />
+          <SkeletonList count={5} />
         </View>
       ) : error ? (
         <View style={styles.center}>
@@ -228,7 +230,7 @@ export default function StockReportScreen() {
           contentContainerStyle={styles.body}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} colors={[BRAND]} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} colors={[theme.tint]} />
           }>
           <SectionTitle title="Stock Movement" />
           {movements.length === 0 ? (

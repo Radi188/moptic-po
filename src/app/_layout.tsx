@@ -2,11 +2,11 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { QuickLoginModal } from '@/components/quick-login-modal';
 import { AuthProvider, useAuth } from '@/contexts/auth';
+import { AppThemeProvider, useThemePreference } from '@/contexts/theme';
 
 // Keep the native splash up until we know whether the user is signed in,
 // so we never flash the login screen at an already-authenticated user.
@@ -55,15 +55,23 @@ function RootNavigator() {
   );
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function ThemedApp() {
+  const { scheme } = useThemePreference();
   return (
-    <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AnimatedSplashOverlay />
-        <RootNavigator />
-        <QuickLoginModal />
-      </ThemeProvider>
-    </AuthProvider>
+    <ThemeProvider value={scheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <AnimatedSplashOverlay />
+      <RootNavigator />
+      <QuickLoginModal />
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AppThemeProvider>
+      <AuthProvider>
+        <ThemedApp />
+      </AuthProvider>
+    </AppThemeProvider>
   );
 }

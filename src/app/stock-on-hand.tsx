@@ -28,6 +28,7 @@ import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
 import type { Stat } from "@/data/dashboard";
 import { formatMoney } from "@/data/inventory";
+import { SkeletonList } from "@/components/skeleton";
 import { useTheme } from "@/hooks/use-theme";
 
 const BRAND = "#232843";
@@ -341,7 +342,7 @@ export default function StockOnHandScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={theme.textSecondary}
-            colors={[BRAND]}
+            colors={[theme.tint]}
           />
         }
         // ListHeaderComponent={
@@ -356,9 +357,7 @@ export default function StockOnHandScreen() {
         renderItem={({ item }) => <ItemCard item={item} theme={theme} />}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : (
             <ThemedText
               type="small"
@@ -427,7 +426,7 @@ function ItemCard({
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
-      <View style={[styles.iconTile, { backgroundColor: `${BRAND}1A` }]}>
+      <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
         {item.image ? (
           <Image
             source={{ uri: item.image }}
@@ -435,7 +434,7 @@ function ItemCard({
             contentFit="cover"
           />
         ) : (
-          <Ionicons name="cube-outline" size={22} color={BRAND} />
+          <Ionicons name="cube-outline" size={22} color={theme.tint} />
         )}
       </View>
       <View style={styles.cardMain}>

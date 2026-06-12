@@ -1,17 +1,12 @@
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
 import { fetchBranchSales, type BranchSalesSummary } from "@/api/daily-sales";
 import { fetchStockDashboard } from "@/api/dashboard";
 import { HomeHeader } from "@/components/home-header";
+import { SkeletonRows, SkeletonStatGrid } from "@/components/skeleton";
 import { StatCard } from "@/components/stat-card";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
@@ -151,11 +146,7 @@ export default function HomeScreen() {
 
         <RefillHero />
 
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={BRAND} />
-          </View>
-        ) : error ? (
+        {error ? (
           <ThemedView type="backgroundElement" style={styles.errorCard}>
             <Ionicons
               name="cloud-offline-outline"
@@ -170,13 +161,17 @@ export default function HomeScreen() {
               {error}
             </ThemedText>
           </ThemedView>
-        ) : data ? (
+        ) : (
           <>
-            <View style={styles.statsGrid}>
-              {data.stats.map((stat) => (
-                <StatCard key={stat.key} stat={stat} />
-              ))}
-            </View>
+            {loading || !data ? (
+              <SkeletonStatGrid />
+            ) : (
+              <View style={styles.statsGrid}>
+                {data.stats.map((stat) => (
+                  <StatCard key={stat.key} stat={stat} />
+                ))}
+              </View>
+            )}
 
             <SectionHeader title="Quick actions" />
             <View style={styles.quickActions}>
@@ -187,7 +182,9 @@ export default function HomeScreen() {
 
             <SectionHeader title="Low stock alerts" actionLabel="See all" />
             <ThemedView type="backgroundElement" style={styles.list}>
-              {data.lowStock.length === 0 ? (
+              {loading || !data ? (
+                <SkeletonRows count={3} />
+              ) : data.lowStock.length === 0 ? (
                 <EmptyRow icon="checkmark-circle-outline" text="No low stock alerts." />
               ) : (
                 data.lowStock.map((item, index) => (
@@ -198,7 +195,9 @@ export default function HomeScreen() {
 
             <SectionHeader title="Branches to refill" actionLabel="See all" />
             <ThemedView type="backgroundElement" style={styles.list}>
-              {branches.length === 0 ? (
+              {loading ? (
+                <SkeletonRows count={3} />
+              ) : branches.length === 0 ? (
                 <EmptyRow
                   icon="storefront-outline"
                   text="No branches available."
@@ -216,7 +215,7 @@ export default function HomeScreen() {
               )}
             </ThemedView>
           </>
-        ) : null}
+        )}
       </ScrollView>
     </ThemedView>
   );
@@ -247,6 +246,7 @@ function RefillHero() {
 
 function QuickActionButton({ action }: { action: QuickAction }) {
   const router = useRouter();
+  const theme = useTheme();
   const iconName = action.icon as React.ComponentProps<typeof Ionicons>["name"];
   return (
     <Pressable
@@ -254,8 +254,8 @@ function QuickActionButton({ action }: { action: QuickAction }) {
       accessibilityLabel={action.label}
       style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
     >
-      <View style={styles.quickIcon}>
-        <Ionicons name={iconName} size={24} color={BRAND} />
+      <View style={[styles.quickIcon, { backgroundColor: theme.tintSoft }]}>
+        <Ionicons name={iconName} size={24} color={theme.tint} />
       </View>
       <ThemedText type="small" numberOfLines={2} style={styles.quickLabel}>
         {action.label}
@@ -271,6 +271,7 @@ function SectionHeader({
   title: string;
   actionLabel?: string;
 }) {
+  const theme = useTheme();
   return (
     <View style={styles.sectionHeader}>
       <ThemedText type="smallBold" style={styles.sectionTitle}>
@@ -281,7 +282,7 @@ function SectionHeader({
           hitSlop={Spacing.two}
           style={({ pressed }) => pressed && styles.pressed}
         >
-          <ThemedText type="link" style={styles.action}>
+          <ThemedText type="link" style={{ color: theme.tint }}>
             {actionLabel}
           </ThemedText>
         </Pressable>
@@ -318,8 +319,8 @@ function LowStockRow({
         divider && { borderTopColor: theme.background, borderTopWidth: 1 },
       ]}
     >
-      <View style={styles.rowIcon}>
-        <Ionicons name="cube-outline" size={20} color={BRAND} />
+      <View style={[styles.rowIcon, { backgroundColor: theme.tintSoft }]}>
+        <Ionicons name="cube-outline" size={20} color={theme.tint} />
       </View>
       <View style={styles.rowText}>
         <ThemedText type="smallBold" numberOfLines={1}>
@@ -363,8 +364,8 @@ function RefillRow({
         pressed && styles.pressed,
       ]}
     >
-      <View style={styles.rowIcon}>
-        <Ionicons name="storefront-outline" size={20} color={BRAND} />
+      <View style={[styles.rowIcon, { backgroundColor: theme.tintSoft }]}>
+        <Ionicons name="storefront-outline" size={20} color={theme.tint} />
       </View>
       <View style={styles.rowText}>
         <ThemedText type="smallBold" numberOfLines={1}>
@@ -479,7 +480,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.four,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: `${BRAND}14`,
   },
   quickLabel: {
     textAlign: "center",
@@ -492,9 +492,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-  },
-  action: {
-    color: BRAND,
   },
   list: {
     borderRadius: Spacing.three,
@@ -512,7 +509,6 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: `${BRAND}14`,
   },
   rowText: {
     flex: 1,

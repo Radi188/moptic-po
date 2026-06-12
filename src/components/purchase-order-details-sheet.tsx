@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Skeleton, SkeletonRows } from '@/components/skeleton';
 import { StatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -40,8 +41,10 @@ export function PurchaseOrderDetailsSheet({ visible, loading, order, onClose, on
           <ThemedView style={styles.handle} type="backgroundSelected" />
 
           {loading && !order ? (
-            <View style={styles.loading}>
-              <ActivityIndicator color={BRAND} />
+            <View style={styles.skeleton}>
+              <Skeleton width="55%" height={20} />
+              <Skeleton width="75%" height={12} />
+              <SkeletonRows count={4} />
             </View>
           ) : order ? (
             <>
@@ -138,12 +141,13 @@ function ItemRow({
 }
 
 function SummaryRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  const theme = useTheme();
   return (
     <View style={styles.summaryRow}>
       <ThemedText type={accent ? 'smallBold' : 'small'} themeColor={accent ? 'text' : 'textSecondary'}>
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" style={accent ? { color: BRAND } : undefined}>
+      <ThemedText type="smallBold" style={accent ? { color: theme.tint } : undefined}>
         {value}
       </ThemedText>
     </View>
@@ -170,10 +174,9 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignSelf: 'center',
   },
-  loading: {
-    paddingVertical: Spacing.six,
-    alignItems: 'center',
-    justifyContent: 'center',
+  skeleton: {
+    paddingVertical: Spacing.three,
+    gap: Spacing.three,
   },
   titleRow: {
     flexDirection: 'row',

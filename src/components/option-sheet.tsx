@@ -7,7 +7,6 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
 
 type Props = {
   visible: boolean;
@@ -45,7 +44,7 @@ export function OptionSheet({ visible, title, options, selected, onSelect, onClo
                     <ThemedText type="smallBold" style={styles.optionLabel}>
                       {option}
                     </ThemedText>
-                    {active && <Ionicons name="checkmark-circle" size={22} color={BRAND} />}
+                    {active && <Ionicons name="checkmark-circle" size={22} color={theme.tint} />}
                   </ThemedView>
                 </Pressable>
               );

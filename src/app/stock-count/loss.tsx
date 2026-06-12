@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { fetchLossSummary, type LossSummaryRow } from '@/api/stock-count';
@@ -9,9 +9,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { formatMoney } from '@/data/inventory';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { SkeletonList } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
 const OVER = '#30A46C';
 const SHORT = '#e5484d';
 
@@ -99,9 +99,7 @@ export default function LossSummaryScreen() {
         renderItem={({ item }) => <LossCard row={item} theme={theme} />}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
               {error ?? 'No loss data for this month.'}

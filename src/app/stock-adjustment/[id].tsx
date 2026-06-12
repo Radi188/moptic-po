@@ -31,9 +31,9 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { formatMoney } from '@/data/inventory';
+import { SkeletonList } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
 const DARK = '#232843';
 const INCREASE = '#30A46C';
 const DECREASE = '#e5484d';
@@ -202,11 +202,11 @@ function AdjustmentForm() {
                     style={({ pressed }) => [styles.flex, pressed && styles.pressed]}>
                     <ThemedView
                       type={active ? 'backgroundSelected' : 'backgroundElement'}
-                      style={[styles.segmentItem, active && { borderColor: BRAND }]}>
+                      style={[styles.segmentItem, active && { borderColor: theme.tint }]}>
                       <Ionicons
                         name={type.icon}
                         size={18}
-                        color={active ? BRAND : theme.textSecondary}
+                        color={active ? theme.tint : theme.textSecondary}
                       />
                       <ThemedText
                         type="smallBold"
@@ -368,8 +368,8 @@ function AdjustmentDetail({ id }: { id: string }) {
         onBack={() => router.back()}
       />
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator color={BRAND} />
+        <View style={styles.body}>
+          <SkeletonList />
         </View>
       ) : error || !adjustment ? (
         <View style={styles.centered}>

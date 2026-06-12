@@ -9,7 +9,6 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
 
 type Props = {
   visible: boolean;
@@ -61,14 +60,14 @@ function BranchOption({ branch, selected, theme, onPress }: BranchOptionProps) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView type={selected ? 'backgroundSelected' : 'backgroundElement'} style={styles.option}>
-        <Ionicons name="business-outline" size={22} color={selected ? BRAND : theme.textSecondary} />
+        <Ionicons name="business-outline" size={22} color={selected ? theme.tint : theme.textSecondary} />
         <ThemedView style={styles.optionText}>
           <ThemedText type="smallBold">{branch.name}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {branch.location}
           </ThemedText>
         </ThemedView>
-        {selected && <Ionicons name="checkmark-circle" size={22} color={BRAND} />}
+        {selected && <Ionicons name="checkmark-circle" size={22} color={theme.tint} />}
       </ThemedView>
     </Pressable>
   );

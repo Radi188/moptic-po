@@ -26,7 +26,6 @@ import type { Branch } from '@/constants/branches';
 import { useAuth } from '@/contexts/auth';
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
 const EMPTY_BRANCHES: Branch[] = [];
 
 function formatDate(d: Date) {
@@ -213,7 +212,7 @@ export default function StockRefillScreen() {
                       setDatePicker(false);
                     }}
                     hitSlop={Spacing.two}>
-                    <ThemedText type="smallBold" style={{ color: BRAND }}>
+                    <ThemedText type="smallBold" style={{ color: theme.tint }}>
                       Done
                     </ThemedText>
                   </Pressable>
@@ -222,7 +221,7 @@ export default function StockRefillScreen() {
                   value={tempDate}
                   mode="date"
                   display="inline"
-                  themeVariant={theme.background === '#000000' ? 'dark' : 'light'}
+                  themeVariant={theme.background !== '#ffffff' ? 'dark' : 'light'}
                   onChange={(_e, selected) => {
                     if (selected) setTempDate(selected);
                   }}
@@ -243,7 +242,7 @@ export default function StockRefillScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={theme.textSecondary}
-            colors={[BRAND]}
+            colors={[theme.tint]}
           />
         }
         renderItem={({ item }) => (
@@ -298,8 +297,8 @@ function BranchCard({
   return (
     <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
       <ThemedView type="backgroundElement" style={styles.card}>
-        <View style={[styles.iconTile, { backgroundColor: `${BRAND}1A` }]}>
-          <Ionicons name="storefront-outline" size={22} color={BRAND} />
+        <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
+          <Ionicons name="storefront-outline" size={22} color={theme.tint} />
         </View>
         <View style={styles.cardMain}>
           <ThemedText type="smallBold" numberOfLines={1}>

@@ -4,7 +4,6 @@ import DateTimePicker, {
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -37,6 +36,7 @@ import {
   type PurchaseOrder,
   type PurchaseOrderPage,
 } from "@/data/purchase-orders";
+import { SkeletonList } from "@/components/skeleton";
 import { useTheme } from "@/hooks/use-theme";
 
 const BRAND = "#232843";
@@ -279,7 +279,7 @@ export default function PurchaseOrdersScreen() {
                     {datePicker === "from" ? "Date From" : "Date To"}
                   </ThemedText>
                   <Pressable onPress={confirmDate} hitSlop={Spacing.two}>
-                    <ThemedText type="smallBold" style={{ color: BRAND }}>
+                    <ThemedText type="smallBold" style={{ color: theme.tint }}>
                       Done
                     </ThemedText>
                   </Pressable>
@@ -288,7 +288,7 @@ export default function PurchaseOrdersScreen() {
                   value={tempDate}
                   mode="date"
                   display="inline"
-                  themeVariant={theme.background === "#000000" ? "dark" : "light"}
+                  themeVariant={theme.background !== "#ffffff" ? "dark" : "light"}
                   onChange={(_event, selectedDate) => {
                     if (selectedDate) setTempDate(selectedDate);
                   }}
@@ -315,9 +315,7 @@ export default function PurchaseOrdersScreen() {
         )}
         ListEmptyComponent={
           loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : (
             <ThemedText
               type="small"
@@ -380,7 +378,7 @@ function OrderCard({
   onLongPress?: () => void;
 }) {
   const theme = useTheme();
-  const statusColor = order.status ? STATUS_META[order.status].color : BRAND;
+  const statusColor = order.status ? STATUS_META[order.status].color : theme.tint;
   const itemCount = order.itemsCount ?? order.items.length;
 
   return (

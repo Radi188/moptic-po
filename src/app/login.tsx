@@ -1,29 +1,30 @@
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useState } from 'react';
+import { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Ionicons from "react-native-vector-icons/Ionicons";
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { useAuth } from '@/contexts/auth';
-import { useTheme } from '@/hooks/use-theme';
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { useAuth } from "@/contexts/auth";
+import { useTheme } from "@/hooks/use-theme";
 
-const BRAND = '#232843';
+const BRAND = "#232843";
 
 export default function LoginScreen() {
   const theme = useTheme();
   const { signIn } = useAuth();
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,7 +37,7 @@ export default function LoginScreen() {
       // On success the auth guard in the root layout swaps to the tabs.
       await signIn(username, password);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to sign in.');
+      setError(e instanceof Error ? e.message : "Unable to sign in.");
     } finally {
       setSubmitting(false);
     }
@@ -46,18 +47,22 @@ export default function LoginScreen() {
     <ThemedView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <SafeAreaView style={styles.safeArea}>
           <ThemedView style={styles.content}>
             <ThemedView style={styles.header}>
-              <ThemedView style={styles.logo}>
-                <Ionicons name="eye-outline" size={40} color="#ffffff" />
-              </ThemedView>
+              <Image
+                source={require("@/assets/images/logo-staff.png")}
+                style={styles.logo}
+                resizeMode="contain"
+                accessibilityLabel="M Optic-PO"
+              />
               <ThemedText type="title" style={styles.heading}>
                 Welcome back
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.subheading}>
-                Sign in to continue to moptic
+                Sign in to continue to M Optic-PO
               </ThemedText>
             </ThemedView>
 
@@ -88,9 +93,12 @@ export default function LoginScreen() {
                   <Pressable
                     onPress={() => setShowPassword((s) => !s)}
                     hitSlop={Spacing.two}
-                    accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}>
+                    accessibilityLabel={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                  >
                     <Ionicons
-                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
                       size={20}
                       color={theme.textSecondary}
                     />
@@ -105,9 +113,12 @@ export default function LoginScreen() {
               )}
 
               <Pressable
-                onPress={() => setError('Password recovery is not available yet.')}
-                style={styles.forgot}>
-                <ThemedText type="link" style={{ color: BRAND }}>
+                onPress={() =>
+                  setError("Password recovery is not available yet.")
+                }
+                style={styles.forgot}
+              >
+                <ThemedText type="link" style={{ color: theme.tint }}>
                   Forgot password?
                 </ThemedText>
               </Pressable>
@@ -119,7 +130,8 @@ export default function LoginScreen() {
                   styles.button,
                   { backgroundColor: BRAND },
                   (pressed || submitting) && styles.buttonPressed,
-                ]}>
+                ]}
+              >
                 {submitting ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
@@ -131,9 +143,9 @@ export default function LoginScreen() {
 
           <ThemedView style={styles.footer}>
             <ThemedText type="small" themeColor="textSecondary">
-              Don&apos;t have an account?{' '}
+              Don&apos;t have an account?{" "}
             </ThemedText>
-            <ThemedText type="smallBold" style={{ color: BRAND }}>
+            <ThemedText type="smallBold" style={{ color: theme.tint }}>
               Sign up
             </ThemedText>
           </ThemedView>
@@ -144,7 +156,7 @@ export default function LoginScreen() {
 }
 
 type FieldProps = React.ComponentProps<typeof TextInput> & {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: React.ComponentProps<typeof Ionicons>["name"];
   trailing?: React.ReactNode;
   theme: ReturnType<typeof useTheme>;
 };
@@ -172,28 +184,25 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     paddingHorizontal: Spacing.four,
-    alignSelf: 'center',
-    width: '100%',
+    alignSelf: "center",
+    width: "100%",
     maxWidth: MaxContentWidth,
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     gap: Spacing.five,
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: Spacing.two,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 88,
+    height: 88,
     borderRadius: Spacing.four,
-    backgroundColor: BRAND,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: Spacing.two,
   },
   heading: {
@@ -201,14 +210,14 @@ const styles = StyleSheet.create({
     lineHeight: 38,
   },
   subheading: {
-    textAlign: 'center',
+    textAlign: "center",
   },
   form: {
     gap: Spacing.three,
   },
   field: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
     height: 52,
@@ -217,40 +226,40 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    height: '100%',
+    height: "100%",
   },
   selectValue: {
     flex: 1,
     fontSize: 16,
   },
   error: {
-    color: '#e5484d',
+    color: "#e5484d",
   },
   forgot: {
-    alignSelf: 'flex-end',
+    alignSelf: "flex-end",
   },
   button: {
     height: 52,
     borderRadius: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: Spacing.one,
   },
   buttonPressed: {
     opacity: 0.85,
   },
   buttonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   pressed: {
     opacity: 0.7,
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: Spacing.three,
   },
 });

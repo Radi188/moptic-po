@@ -5,11 +5,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import type { Stat } from '@/data/dashboard';
-
-/** Single primary brand color used across the whole dashboard. */
-const BRAND = '#232843';
+import { useTheme } from '@/hooks/use-theme';
 
 export function StatCard({ stat }: { stat: Stat }) {
+  const theme = useTheme();
   const iconName = stat.icon as React.ComponentProps<typeof Ionicons>['name'];
 
   return (
@@ -18,8 +17,8 @@ export function StatCard({ stat }: { stat: Stat }) {
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.label}>
           {stat.label}
         </ThemedText>
-        <View style={styles.iconWrap}>
-          <Ionicons name={iconName} size={16} color={BRAND} />
+        <View style={[styles.iconWrap, { backgroundColor: theme.tintSoft }]}>
+          <Ionicons name={iconName} size={16} color={theme.tint} />
         </View>
       </View>
       <ThemedText style={styles.value} numberOfLines={1}>
@@ -51,7 +50,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${BRAND}14`,
   },
   value: {
     fontSize: 26,

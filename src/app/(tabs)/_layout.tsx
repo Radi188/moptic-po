@@ -4,8 +4,6 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
-
 /** Renders the filled icon when focused, the outline variant otherwise. */
 function tabIcon(base: string) {
   return function TabBarIcon({
@@ -31,7 +29,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: BRAND,
+        tabBarActiveTintColor: theme.tint,
         tabBarInactiveTintColor: theme.textSecondary,
         tabBarStyle: { backgroundColor: theme.background },
         tabBarLabelStyle: { fontSize: 11 },

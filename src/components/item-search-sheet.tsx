@@ -17,9 +17,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { formatMoney } from '@/data/purchase-orders';
+import { SkeletonRows } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 
-const BRAND = '#232843';
 
 type Props = {
   visible: boolean;
@@ -92,7 +92,7 @@ export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Prop
               Choose Items
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={Spacing.two}>
-              <ThemedText type="smallBold" style={{ color: BRAND }}>
+              <ThemedText type="smallBold" style={{ color: theme.tint }}>
                 Done
               </ThemedText>
             </Pressable>
@@ -117,9 +117,7 @@ export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Prop
           </ThemedView>
 
           {loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonRows count={6} />
           ) : (
             <FlatList
               data={items}
@@ -191,7 +189,7 @@ function ItemRow({
         <Ionicons
           name={added ? 'checkmark-circle' : 'add-circle-outline'}
           size={24}
-          color={added ? '#30A46C' : BRAND}
+          color={added ? '#30A46C' : theme.tint}
         />
       </ThemedView>
     </Pressable>

@@ -21,6 +21,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { SkeletonList } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -194,9 +195,7 @@ export default function BranchRefillScreen() {
           </View>
 
           {loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={BRAND} />
-            </View>
+            <SkeletonList />
           ) : rows.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
               {error ?? 'No items were sold by this branch on this day.'}

@@ -5,14 +5,27 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BranchPickerSheet } from '@/components/branch-picker-sheet';
+import { OptionSheet } from '@/components/option-sheet';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useThemePreference, type ThemePreference } from '@/contexts/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
 const DANGER = '#e5484d';
+
+const APPEARANCE_LABELS: Record<ThemePreference, string> = {
+  system: 'System',
+  light: 'Light',
+  dark: 'Dark',
+};
+const APPEARANCE_OPTIONS = ['System', 'Light', 'Dark'];
+
+function labelToPreference(label: string): ThemePreference {
+  return label === 'Light' ? 'light' : label === 'Dark' ? 'dark' : 'system';
+}
 
 function getInitials(name: string) {
   const letters = name
@@ -28,7 +41,9 @@ export default function SettingsScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session, switchBranch, signOut } = useAuth();
+  const { preference, setPreference } = useThemePreference();
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
 
   function confirmSignOut() {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
@@ -100,7 +115,7 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="bar-chart-outline"
-            color={BRAND}
+            color={theme.tint}
             label="Stock Report"
             onPress={() => router.push('/stock-report')}
             theme={theme}
@@ -137,10 +152,10 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="color-palette-outline"
-            color="#232843"
+            color={theme.tint}
             label="Appearance"
-            value="System"
-            onPress={soon}
+            value={APPEARANCE_LABELS[preference]}
+            onPress={() => setAppearanceOpen(true)}
             theme={theme}
             last
           />
@@ -181,6 +196,18 @@ export default function SettingsScreen() {
           setBranchPickerOpen(false);
         }}
         onClose={() => setBranchPickerOpen(false)}
+      />
+
+      <OptionSheet
+        visible={appearanceOpen}
+        title="Appearance"
+        options={APPEARANCE_OPTIONS}
+        selected={APPEARANCE_LABELS[preference]}
+        onSelect={(value) => {
+          setPreference(labelToPreference(value));
+          setAppearanceOpen(false);
+        }}
+        onClose={() => setAppearanceOpen(false)}
       />
     </ThemedView>
   );
