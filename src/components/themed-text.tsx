@@ -8,12 +8,19 @@ export type ThemedTextProps = TextProps & {
   themeColor?: ThemeColor;
 };
 
+const androidNoFontPadding =
+  Platform.OS === 'android' ? ({ includeFontPadding: false } as const) : null;
+
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
 
   return (
     <Text
       style={[
+        // Android reserves extra top/bottom padding sized for tall scripts
+        // (e.g. Khmer), which makes lines look over-spaced. Drop it so the
+        // explicit lineHeight controls spacing consistently across scripts.
+        androidNoFontPadding,
         { color: theme[themeColor ?? 'text'] },
         type === 'default' && styles.default,
         type === 'title' && styles.title,
