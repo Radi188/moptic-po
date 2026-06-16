@@ -10,7 +10,10 @@
     "ios": {
       "bundleIdentifier": "com.moptic.staff",
       "buildNumber": "1",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.moptic.staff",
@@ -43,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4c4ede3a-dcdd-4872-bfdc-3f7095b81857"
+      }
+    },
+    "owner": "neji"
   }
 }

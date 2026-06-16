@@ -5,14 +5,16 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import type { Stat } from '@/data/dashboard';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
 export function StatCard({ stat }: { stat: Stat }) {
   const theme = useTheme();
+  const { isTablet } = useResponsive();
   const iconName = stat.icon as React.ComponentProps<typeof Ionicons>['name'];
 
   return (
-    <ThemedView type="backgroundElement" style={styles.card}>
+    <ThemedView type="backgroundElement" style={[styles.card, isTablet && styles.cardTablet]}>
       <View style={styles.topRow}>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1} style={styles.label}>
           {stat.label}
@@ -34,6 +36,10 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.three,
     gap: Spacing.two,
+  },
+  // Tablets fit all four stats on a single row.
+  cardTablet: {
+    width: '23.5%',
   },
   topRow: {
     flexDirection: 'row',

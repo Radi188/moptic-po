@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -29,6 +30,7 @@ type Props = {
 export function HomeHeader({ onPressNotifications, onPressAvatar }: Props) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
   const { session, switchBranch } = useAuth();
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
 
@@ -45,7 +47,7 @@ export function HomeHeader({ onPressNotifications, onPressAvatar }: Props) {
       />
 
       <View style={styles.left}>
-        <ThemedText style={styles.title}>Stock Control</ThemedText>
+        <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Stock Control</ThemedText>
         <Pressable
           onPress={() => setBranchPickerOpen(true)}
           accessibilityLabel="Switch branch"
@@ -104,6 +106,10 @@ const styles = StyleSheet.create({
     fontSize: 26,
     lineHeight: 32,
     fontWeight: '700',
+  },
+  titleTablet: {
+    fontSize: 32,
+    lineHeight: 40,
   },
   branchRow: {
     flexDirection: 'row',

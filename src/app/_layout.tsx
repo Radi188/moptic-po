@@ -1,8 +1,9 @@
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
+import { loadBaseUrlOverride } from '@/api/config';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { QuickLoginModal } from '@/components/quick-login-modal';
 import { AuthProvider, useAuth } from '@/contexts/auth';
@@ -20,7 +21,13 @@ function RootNavigator() {
     Ionicons: require('react-native-vector-icons/Fonts/Ionicons.ttf'),
   });
 
-  const ready = !isLoading && fontsLoaded;
+  // Apply any persisted API base URL override before the first request.
+  const [configLoaded, setConfigLoaded] = useState(false);
+  useEffect(() => {
+    loadBaseUrlOverride().finally(() => setConfigLoaded(true));
+  }, []);
+
+  const ready = !isLoading && fontsLoaded && configLoaded;
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();

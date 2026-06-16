@@ -24,9 +24,13 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import type { Branch } from '@/constants/branches';
 import { useAuth } from '@/contexts/auth';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
 const EMPTY_BRANCHES: Branch[] = [];
+
+/** Preferred default source warehouse. */
+const DEFAULT_WAREHOUSE = 'ស្តុកធំ+online';
 
 function formatDate(d: Date) {
   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -39,15 +43,23 @@ function ymd(d: Date) {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+/** Yesterday — sales are refilled the day after they happen. */
+function yesterday() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d;
+}
+
 export default function StockRefillScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
   const { session } = useAuth();
   const branches = session?.branches ?? EMPTY_BRANCHES;
 
-  const [date, setDate] = useState(() => new Date());
+  const [date, setDate] = useState(yesterday);
   const [datePicker, setDatePicker] = useState(false);
-  const [tempDate, setTempDate] = useState(() => new Date());
+  const [tempDate, setTempDate] = useState(yesterday);
 
   const [source, setSource] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
@@ -59,12 +71,16 @@ export default function StockRefillScreen() {
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
-  // Source warehouse options; default to the first warehouse.
+  // Source warehouse options; default to "ស្តុកធំ+online" when present, else
+  // any warehouse whose name mentions "online", else the first one.
   useEffect(() => {
     getWarehouses()
       .then((options) => {
         setWarehouseOptions(options);
-        setSource((prev) => prev ?? options[0] ?? null);
+        const preferred =
+          options.find((o) => o.name === DEFAULT_WAREHOUSE) ??
+          options.find((o) => o.name.toLowerCase().includes('online'));
+        setSource((prev) => prev ?? preferred ?? options[0] ?? null);
       })
       .catch(() => {});
   }, []);
@@ -235,6 +251,9 @@ export default function StockRefillScreen() {
       <FlatList
         data={branches}
         keyExtractor={(item) => item.id}
+        key={isTablet ? 'grid' : 'list'}
+        numColumns={isTablet ? 2 : 1}
+        columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -246,13 +265,15 @@ export default function StockRefillScreen() {
           />
         }
         renderItem={({ item }) => (
-          <BranchCard
-            branch={item}
-            summary={summaries[item.id]}
-            loading={loading}
-            onPress={() => openBranch(item)}
-            theme={theme}
-          />
+          <View style={isTablet ? styles.gridItem : undefined}>
+            <BranchCard
+              branch={item}
+              summary={summaries[item.id]}
+              loading={loading}
+              onPress={() => openBranch(item)}
+              theme={theme}
+            />
+          </View>
         )}
         ListEmptyComponent={
           <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
@@ -358,6 +379,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
+  },
+  columnWrapper: {
+    gap: Spacing.three,
+  },
+  gridItem: {
+    flex: 1,
   },
   empty: {
     textAlign: 'center',

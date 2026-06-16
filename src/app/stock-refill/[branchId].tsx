@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,9 +23,26 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { SkeletonList } from '@/components/skeleton';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
+import { generateRefillReportPdf, toReportRow } from '@/lib/refill-report';
+import { isTelegramConfigured, sendTelegramDocument } from '@/lib/telegram';
 
 const BRAND = '#232843';
+
+/** Local YYYY-MM-DD (avoids the UTC shift of toISOString). */
+function ymd(d: Date) {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** Local "YYYY-MM-DD HH:mm:ss" timestamp for the moment the transfer is created. */
+function nowDateTime() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${ymd(d)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 
 export default function BranchRefillScreen() {
   const params = useLocalSearchParams<{
@@ -37,10 +55,12 @@ export default function BranchRefillScreen() {
   }>();
   const router = useRouter();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
   const { session } = useAuth();
 
   const [rows, setRows] = useState<SoldItem[]>([]);
   const [qtys, setQtys] = useState<Record<string, string>>({});
+  const [bmName, setBmName] = useState('');
   const [stock, setStock] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(true);
@@ -126,8 +146,10 @@ export default function BranchRefillScreen() {
       from_warehouse: Number(params.sourceId),
       to_warehouse: Number(params.warehouseId),
       branch_login_id: Number(session?.branch.id ?? 0),
-      date: params.date,
-      description: `Daily refill — ${params.branchName} (${params.date})`,
+      // The transfer is stamped with the exact moment it's created (now), not
+      // the sales day. The sales date is kept in the description for reference.
+      date: nowDateTime(),
+      description: `Daily refill — ${params.branchName} · Sales date ${params.date}`,
       items: items.map(({ row, qty }) => ({
         item_id: Number(row.itemId),
         item_code: row.itemCode,
@@ -141,11 +163,54 @@ export default function BranchRefillScreen() {
     setSubmitting(true);
     try {
       await createTransfer(body);
+      // The report lists every sold item with the exact transfer-out entered
+      // (0 included), so shortages show up in the Less column — unlike the
+      // transfer body above, which can only carry qty > 0 rows.
+      const reportItems = rows.map((r) => ({
+        row: r,
+        qty: parseInt(qtys[r.itemId] ?? '', 10) || 0,
+      }));
+      await sendRefillReport(reportItems);
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create transfer.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /**
+   * Generate the control-sheet PDF for the transferred items and push it to the
+   * Telegram control group. The transfer has already been created at this point,
+   * so a delivery failure is surfaced as an alert but never blocks completion.
+   */
+  async function sendRefillReport(items: { row: SoldItem; qty: number }[]) {
+    if (!isTelegramConfigured()) return;
+    try {
+      const reportRows = items.map(({ row, qty }) =>
+        toReportRow(row.itemName, row.qtySold, qty),
+      );
+      const uri = await generateRefillReportPdf(reportRows, {
+        branchName: params.branchName || `Branch ${params.branchId}`,
+        sourceName: params.sourceName,
+        date: params.date,
+        createdDate: ymd(new Date()),
+        bmName: bmName.trim(),
+      });
+      await sendTelegramDocument({
+        uri,
+        filename: `refill-${params.branchName || params.branchId}-${params.date}.pdf`,
+        caption:
+          `Stock refill — ${params.branchName || params.branchId} (${params.date})` +
+          (bmName.trim() ? `\nBM: ${bmName.trim()}` : ''),
+      });
+    } catch (e) {
+      Alert.alert(
+        'Report not sent',
+        `The transfer was created, but the Telegram report could not be sent.\n\n${
+          e instanceof Error ? e.message : 'Unknown error.'
+        }`,
+      );
     }
   }
 
@@ -181,8 +246,32 @@ export default function BranchRefillScreen() {
             </View>
           </ThemedView>
 
+          <View style={styles.fieldGroup}>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={isTablet ? styles.labelTablet : undefined}>
+              BM name (controls the branch)
+            </ThemedText>
+            <ThemedView
+              type="backgroundElement"
+              style={[styles.bmInputWrap, isTablet && styles.bmInputWrapTablet]}>
+              <Ionicons name="person-outline" size={isTablet ? 22 : 18} color={theme.textSecondary} />
+              <TextInput
+                value={bmName}
+                onChangeText={setBmName}
+                placeholder="Enter BM name for the report"
+                placeholderTextColor={theme.textSecondary}
+                autoCapitalize="words"
+                style={[styles.bmInput, isTablet && styles.bmInputTablet, { color: theme.text }]}
+              />
+            </ThemedView>
+          </View>
+
           <View style={styles.sectionHeader}>
-            <ThemedText type="smallBold" style={styles.sectionTitle}>
+            <ThemedText
+              type="smallBold"
+              style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}>
               Sold items
             </ThemedText>
             {rows.length > 0 && (
@@ -212,6 +301,7 @@ export default function BranchRefillScreen() {
                   onChange={(v) => setQty(row.itemId, v)}
                   divider={index > 0}
                   theme={theme}
+                  isTablet={isTablet}
                 />
               ))}
             </ThemedView>
@@ -230,12 +320,13 @@ export default function BranchRefillScreen() {
             disabled={submitting || selectedCount === 0}
             style={({ pressed }) => [
               styles.submit,
+              isTablet && styles.submitTablet,
               (pressed || submitting || selectedCount === 0) && styles.pressed,
             ]}>
             {submitting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <ThemedText style={styles.submitText}>
+              <ThemedText style={[styles.submitText, isTablet && styles.submitTextTablet]}>
                 Create Transfer{selectedCount > 0 ? ` (${selectedCount})` : ''}
               </ThemedText>
             )}
@@ -254,6 +345,7 @@ function ItemRow({
   onChange,
   divider,
   theme,
+  isTablet,
 }: {
   row: SoldItem;
   value: string;
@@ -262,6 +354,7 @@ function ItemRow({
   onChange: (v: string) => void;
   divider: boolean;
   theme: ReturnType<typeof useTheme>;
+  isTablet: boolean;
 }) {
   const entered = parseInt(value, 10) || 0;
   const over = entered > available;
@@ -269,31 +362,47 @@ function ItemRow({
 
   return (
     <View
-      style={[styles.itemRow, divider && { borderTopColor: theme.background, borderTopWidth: 1 }]}>
-      <ThemedView type="backgroundSelected" style={styles.thumb}>
+      style={[
+        styles.itemRow,
+        isTablet && styles.itemRowTablet,
+        divider && { borderTopColor: theme.background, borderTopWidth: 1 },
+      ]}>
+      <ThemedView type="backgroundSelected" style={[styles.thumb, isTablet && styles.thumbTablet]}>
         {row.image ? (
           <Image source={{ uri: row.image }} style={styles.thumbImage} contentFit="cover" />
         ) : (
-          <Ionicons name="cube-outline" size={18} color={theme.textSecondary} />
+          <Ionicons name="cube-outline" size={isTablet ? 26 : 18} color={theme.textSecondary} />
         )}
       </ThemedView>
       <View style={styles.itemInfo}>
-        <ThemedText type="smallBold" numberOfLines={1}>
+        <ThemedText
+          type="smallBold"
+          numberOfLines={1}
+          style={isTablet ? styles.itemNameTablet : undefined}>
           {row.itemName}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          numberOfLines={1}
+          style={isTablet ? styles.itemCodeTablet : undefined}>
           {row.itemCode}
         </ThemedText>
         <View style={styles.metaRow}>
           <View style={styles.metaPill}>
-            <Ionicons name="cart-outline" size={12} color={theme.textSecondary} />
-            <ThemedText type="small" themeColor="textSecondary">
+            <Ionicons name="cart-outline" size={isTablet ? 16 : 12} color={theme.textSecondary} />
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={isTablet ? styles.metaTextTablet : undefined}>
               Sold {row.qtySold}
             </ThemedText>
           </View>
           <View style={styles.metaPill}>
-            <Ionicons name="cube-outline" size={12} color={stockColor} />
-            <ThemedText type="small" style={{ color: stockColor }}>
+            <Ionicons name="cube-outline" size={isTablet ? 16 : 12} color={stockColor} />
+            <ThemedText
+              type="small"
+              style={[{ color: stockColor }, isTablet && styles.metaTextTablet]}>
               {stockLoading ? 'Checking…' : `In stock ${available}`}
             </ThemedText>
           </View>
@@ -301,14 +410,18 @@ function ItemRow({
       </View>
       <ThemedView
         type="background"
-        style={[styles.qtyInputWrap, over && { borderWidth: 1, borderColor: '#e5484d' }]}>
+        style={[
+          styles.qtyInputWrap,
+          isTablet && styles.qtyInputWrapTablet,
+          over && { borderWidth: 1, borderColor: '#e5484d' },
+        ]}>
         <TextInput
           value={value}
           onChangeText={onChange}
           placeholder="0"
           placeholderTextColor={theme.textSecondary}
           keyboardType="number-pad"
-          style={[styles.qtyInput, { color: over ? '#e5484d' : theme.text }]}
+          style={[styles.qtyInput, isTablet && styles.qtyInputTablet, { color: over ? '#e5484d' : theme.text }]}
         />
       </ThemedView>
     </View>
@@ -339,6 +452,22 @@ const styles = StyleSheet.create({
   routeCol: {
     flex: 1,
     gap: Spacing.half,
+  },
+  fieldGroup: {
+    gap: Spacing.one,
+  },
+  bmInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    height: 46,
+    borderRadius: Spacing.three,
+  },
+  bmInput: {
+    flex: 1,
+    fontSize: 15,
+    height: '100%',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -396,6 +525,62 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
+  },
+  // Tablet overrides: larger text and taller controls to use the extra space.
+  // Khmer glyphs are tall, so each size carries a generous lineHeight (~1.4x)
+  // to avoid clipping the stacked marks.
+  labelTablet: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  bmInputWrapTablet: {
+    height: 60,
+    borderRadius: Spacing.four,
+  },
+  bmInputTablet: {
+    fontSize: 18,
+    lineHeight: 26,
+  },
+  sectionTitleTablet: {
+    fontSize: 22,
+    lineHeight: 32,
+  },
+  itemRowTablet: {
+    paddingVertical: Spacing.four,
+    gap: Spacing.four,
+  },
+  thumbTablet: {
+    width: 56,
+    height: 56,
+    borderRadius: Spacing.three,
+  },
+  itemNameTablet: {
+    fontSize: 18,
+    lineHeight: 26,
+  },
+  itemCodeTablet: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  metaTextTablet: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  qtyInputWrapTablet: {
+    width: 96,
+    height: 60,
+    borderRadius: Spacing.three,
+  },
+  qtyInputTablet: {
+    fontSize: 24,
+    lineHeight: 30,
+  },
+  submitTablet: {
+    height: 64,
+  },
+  submitTextTablet: {
+    fontSize: 20,
+    lineHeight: 28,
   },
   center: {
     paddingVertical: Spacing.six,

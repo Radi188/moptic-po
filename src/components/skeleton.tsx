@@ -10,6 +10,7 @@ import {
 
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
@@ -103,10 +104,15 @@ export function SkeletonRows({ count = 3 }: { count?: number }) {
 
 /** A 2-column grid of stat-card placeholders, matching the dashboard stats. */
 export function SkeletonStatGrid({ count = 4 }: { count?: number }) {
+  const { isTablet } = useResponsive();
   return (
     <View style={styles.statGrid}>
       {Array.from({ length: count }).map((_, i) => (
-        <ThemedView key={i} type="backgroundElement" style={styles.statCard}>
+        <ThemedView
+          key={i}
+          type="backgroundElement"
+          style={[styles.statCard, isTablet && styles.statCardTablet]}
+        >
           <View style={styles.statTop}>
             <Skeleton width="55%" height={12} />
             <Skeleton width={30} height={30} radius={15} />
@@ -150,6 +156,9 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.three,
     gap: Spacing.two,
+  },
+  statCardTablet: {
+    width: '23.5%',
   },
   statTop: {
     flexDirection: 'row',

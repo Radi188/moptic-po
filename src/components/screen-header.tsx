@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
 export function ScreenHeader({ title, subtitle, right, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
@@ -26,13 +28,16 @@ export function ScreenHeader({ title, subtitle, right, onBack }: Props) {
         accessibilityLabel="Go back"
         style={({ pressed }) => [
           styles.backTile,
+          isTablet && styles.backTileTablet,
           { backgroundColor: theme.backgroundElement },
           pressed && styles.pressed,
         ]}>
-        <Ionicons name="chevron-back" size={22} color={theme.text} />
+        <Ionicons name="chevron-back" size={isTablet ? 26 : 22} color={theme.text} />
       </Pressable>
       <View style={styles.headerText}>
-        <ThemedText style={styles.headerTitle} numberOfLines={1}>
+        <ThemedText
+          style={[styles.headerTitle, isTablet && styles.headerTitleTablet]}
+          numberOfLines={1}>
           {title}
         </ThemedText>
         {subtitle ? (
@@ -61,6 +66,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  backTileTablet: {
+    width: 48,
+    height: 48,
+    borderRadius: Spacing.four,
+  },
   headerText: {
     flex: 1,
     gap: Spacing.half,
@@ -70,6 +80,10 @@ const styles = StyleSheet.create({
     // Roomy enough for Khmer (tall stacked glyphs) without clipping.
     lineHeight: 28,
     fontWeight: '700',
+  },
+  headerTitleTablet: {
+    fontSize: 26,
+    lineHeight: 36,
   },
   pressed: {
     opacity: 0.7,

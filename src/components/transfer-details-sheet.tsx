@@ -77,6 +77,14 @@ export function TransferDetailsSheet({
                   value={formatDateTime(transfer.transactionDate)}
                   theme={theme}
                 />
+                {transfer.description ? (
+                  <InfoRow
+                    label="Reference"
+                    value={transfer.description}
+                    theme={theme}
+                    numberOfLines={2}
+                  />
+                ) : null}
                 <InfoRow label="User Request" value={transfer.userRequest} theme={theme} last />
               </ThemedView>
 
@@ -120,11 +128,13 @@ function InfoRow({
   value,
   theme,
   last,
+  numberOfLines = 1,
 }: {
   label: string;
   value: string;
   theme: ReturnType<typeof useTheme>;
   last?: boolean;
+  numberOfLines?: number;
 }) {
   return (
     <View
@@ -135,7 +145,7 @@ function InfoRow({
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" style={styles.infoValue} numberOfLines={1}>
+      <ThemedText type="smallBold" style={styles.infoValue} numberOfLines={numberOfLines}>
         {value}
       </ThemedText>
     </View>

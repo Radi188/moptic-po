@@ -26,6 +26,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { SkeletonList } from '@/components/skeleton';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 import {
   formatDateTime,
@@ -36,13 +37,35 @@ import {
 } from '@/data/transfers';
 
 const BRAND = '#232843';
+const DONE = '#30A46C';
 
 type StatusFilter = 'all' | TransferStatus;
+
+/** Local YYYY-MM-DD. */
+function ymd(d: Date) {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/**
+ * A transfer counts as "already refilled today" when it was created today and
+ * its reference (description) carries yesterday's sales date — i.e. it's the
+ * daily warehouse→branch refill for yesterday's sales. Resets each day.
+ */
+function isRefilledToday(transfer: StockTransfer) {
+  const today = ymd(new Date());
+  const yesterday = ymd(new Date(Date.now() - 86400000));
+  const createdToday = transfer.transactionDate.slice(0, 10) === today;
+  const salesDate = transfer.description.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  return createdToday && salesDate === yesterday;
+}
 
 export default function TransfersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -140,7 +163,7 @@ export default function TransfersScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View>
-          <ThemedText style={styles.title}>Stock Transfer</ThemedText>
+          <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Stock Transfer</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {total} transfers
           </ThemedText>
@@ -182,6 +205,7 @@ export default function TransfersScreen() {
             active={status === 'all'}
             onPress={() => setStatus('all')}
             theme={theme}
+            isTablet={isTablet}
           />
           {TRANSFER_STATUSES.map((s) => (
             <FilterChip
@@ -191,6 +215,7 @@ export default function TransfersScreen() {
               active={status === s}
               onPress={() => setStatus(s)}
               theme={theme}
+              isTablet={isTablet}
             />
           ))}
         </ScrollView>
@@ -199,16 +224,21 @@ export default function TransfersScreen() {
       <FlatList
         data={items}
         keyExtractor={(item, index) => `${item.id}-${index}`}
+        key={isTablet ? 'grid' : 'list'}
+        numColumns={isTablet ? 2 : 1}
+        columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         onEndReachedThreshold={0.4}
         onEndReached={loadMore}
         renderItem={({ item }) => (
-          <TransferCard
-            transfer={item}
-            onPress={() => openTransfer(item.id)}
-            onLongPress={isApiConfigured() ? undefined : () => editTransfer(item.id)}
-          />
+          <View style={isTablet ? styles.gridItem : undefined}>
+            <TransferCard
+              transfer={item}
+              onPress={() => openTransfer(item.id)}
+              onLongPress={isApiConfigured() ? undefined : () => editTransfer(item.id)}
+            />
+          </View>
         )}
         ListEmptyComponent={
           loading ? (
@@ -248,24 +278,31 @@ function FilterChip({
   active,
   onPress,
   theme,
+  isTablet,
 }: {
   label: string;
   color: string;
   active: boolean;
   onPress: () => void;
   theme: ReturnType<typeof useTheme>;
+  isTablet: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={Spacing.one}
       style={({ pressed }) => [
         styles.chip,
+        isTablet && styles.chipTablet,
         { backgroundColor: active ? color : theme.backgroundElement },
         pressed && styles.pressed,
       ]}>
       <ThemedText
-        type="small"
-        style={active ? styles.chipActiveText : { color: theme.textSecondary }}>
+        type="smallBold"
+        style={[
+          isTablet && styles.chipTextTablet,
+          active ? styles.chipActiveText : { color: theme.textSecondary },
+        ]}>
         {label}
       </ThemedText>
     </Pressable>
@@ -284,6 +321,7 @@ function TransferCard({
   const theme = useTheme();
   const statusColor = STATUS_META[transfer.status].color;
   const itemCount = transfer.itemsCount ?? transfer.items.length;
+  const done = isRefilledToday(transfer);
 
   return (
     <Pressable
@@ -298,6 +336,14 @@ function TransferCard({
           </View>
           <View style={styles.cardMain}>
             <View style={styles.refRow}>
+              {done && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={18}
+                  color={DONE}
+                  accessibilityLabel="Already refilled today"
+                />
+              )}
               <ThemedText type="smallBold" numberOfLines={1} style={styles.refText}>
                 {transfer.reference}
               </ThemedText>
@@ -356,6 +402,10 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: '700',
   },
+  titleTablet: {
+    fontSize: 32,
+    lineHeight: 40,
+  },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,13 +441,22 @@ const styles = StyleSheet.create({
   chips: {
     gap: Spacing.two,
     paddingRight: Spacing.four,
+    alignItems: 'center',
   },
   chip: {
-    paddingHorizontal: Spacing.three,
-    height: 34,
+    paddingHorizontal: Spacing.four,
+    height: 44,
     borderRadius: Spacing.five,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  chipTablet: {
+    paddingHorizontal: Spacing.five,
+    height: 56,
+  },
+  chipTextTablet: {
+    fontSize: 18,
+    lineHeight: 24,
   },
   chipActiveText: {
     color: '#ffffff',
@@ -410,6 +469,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
+  },
+  columnWrapper: {
+    gap: Spacing.three,
+  },
+  gridItem: {
+    flex: 1,
   },
   empty: {
     textAlign: 'center',

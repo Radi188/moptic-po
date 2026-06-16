@@ -24,6 +24,8 @@ type ApiListItem = {
   warehouse_to?: ApiWarehouseRef | null;
   request_user?: ApiUser | null;
   stock_transfer_details_count?: number;
+  note?: string | null;
+  description?: string | null;
 };
 
 type ApiListResponse =
@@ -55,7 +57,15 @@ type ApiDetail = ApiListItem & {
 };
 
 const num = (v: string | number | undefined) => Number(v ?? 0) || 0;
-const toIso = (s: string) => (s && s.includes('T') ? s : `${s}T00:00:00`);
+// Normalise the backend date into something `new Date()` parses reliably:
+// keep ISO strings as-is, turn "YYYY-MM-DD HH:mm:ss" into "…THH:mm:ss", and
+// treat a bare date as midnight.
+const toIso = (s: string) => {
+  if (!s) return s;
+  if (s.includes('T')) return s;
+  if (s.includes(' ')) return s.replace(' ', 'T');
+  return `${s}T00:00:00`;
+};
 
 function mapStatus(s: string | undefined): TransferStatus {
   const v = String(s ?? '').toLowerCase();
@@ -71,7 +81,7 @@ function mapListItem(row: ApiListItem): StockTransfer {
     fromWarehouse: row.warehouse_from?.warehouse_name ?? String(row.from_warehouse ?? ''),
     toWarehouse: row.warehouse_to?.warehouse_name ?? String(row.to_warehouse ?? ''),
     transactionDate: toIso(row.transaction_date),
-    description: '',
+    description: row.note ?? row.description ?? '',
     userRequest: row.request_user?.name ?? '',
     status: mapStatus(row.status),
     items: [],

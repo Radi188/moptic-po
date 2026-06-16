@@ -1,10 +1,11 @@
 import { useRouter, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
 import { fetchBranchSales, type BranchSalesSummary } from "@/api/daily-sales";
 import { fetchStockDashboard } from "@/api/dashboard";
+import { getWarehouses, type ApiOption } from "@/api/purchase-orders";
 import { HomeHeader } from "@/components/home-header";
 import { SkeletonRows, SkeletonStatGrid } from "@/components/skeleton";
 import { StatCard } from "@/components/stat-card";
@@ -14,6 +15,7 @@ import type { Branch } from "@/constants/branches";
 import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
 import type { DashboardData, LowStockItem } from "@/data/dashboard";
+import { useResponsive } from "@/hooks/use-responsive";
 import { useTheme } from "@/hooks/use-theme";
 
 /** The single primary brand color used across the whole dashboard. */
@@ -21,11 +23,21 @@ const BRAND = "#232843";
 
 const EMPTY_BRANCHES: Branch[] = [];
 
+/** Preferred default source warehouse for a refill. */
+const DEFAULT_WAREHOUSE = "ស្តុកធំ+online";
+
 /** Local YYYY-MM-DD (avoids the UTC shift of toISOString). */
 function ymd(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** Yesterday — refills are based on the previous day's sales. */
+function yesterday() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d;
 }
 
 type QuickAction = {
@@ -65,6 +77,8 @@ const QUICK_ACTIONS: QuickAction[] = [
 export default function HomeScreen() {
   const { session } = useAuth();
   const theme = useTheme();
+  const router = useRouter();
+  const { isTablet } = useResponsive();
   const branchId = session?.branch.id ?? "";
   const branches = session?.branches ?? EMPTY_BRANCHES;
 
@@ -76,6 +90,25 @@ export default function HomeScreen() {
     Record<string, BranchSalesSummary>
   >({});
   const [refillLoading, setRefillLoading] = useState(true);
+  const [source, setSource] = useState<ApiOption | null>(null);
+
+  // Resolve the default source warehouse so a branch tap can jump straight
+  // into its refill screen (mirrors the Stock Refill list default).
+  useEffect(() => {
+    let active = true;
+    getWarehouses()
+      .then((options) => {
+        if (!active) return;
+        const preferred =
+          options.find((o) => o.name === DEFAULT_WAREHOUSE) ??
+          options.find((o) => o.name.toLowerCase().includes("online"));
+        setSource((prev) => prev ?? preferred ?? options[0] ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Re-fetch whenever the active branch changes (header / settings switch).
   useEffect(() => {
@@ -104,9 +137,7 @@ export default function HomeScreen() {
   useEffect(() => {
     let active = true;
     setRefillLoading(true);
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const date = ymd(yesterday);
+    const date = ymd(yesterday());
     Promise.all(
       branches.map(async (b) => {
         try {
@@ -130,6 +161,45 @@ export default function HomeScreen() {
       active = false;
     };
   }, [branches]);
+
+  // Tapping a branch jumps straight into its refill screen for yesterday's
+  // sales. With no sales, prompt the user to create a stock transfer instead.
+  function openBranchRefill(branch: Branch) {
+    const summary = refillSales[branch.id];
+    const sold = summary && summary.itemCount > 0;
+    if (!sold) {
+      Alert.alert(
+        "No sales yesterday",
+        `${branch.name || `Branch ${branch.id}`} had no sales yesterday. Please create a stock transfer instead.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Create transfer",
+            onPress: () =>
+              router.push({ pathname: "/transfer/[id]", params: { id: "new" } }),
+          },
+        ],
+      );
+      return;
+    }
+    if (!source) {
+      // Warehouses still loading — fall back to the refill list.
+      router.push("/stock-refill");
+      return;
+    }
+    router.push({
+      pathname: "/stock-refill/[branchId]",
+      params: {
+        branchId: branch.id,
+        branchName: branch.name,
+        // Branches map 1:1 to a warehouse with the same id in this backend.
+        warehouseId: branch.id,
+        date: ymd(yesterday()),
+        sourceId: source.id,
+        sourceName: source.name,
+      },
+    });
+  }
 
   return (
     <ThemedView style={styles.container}>
@@ -180,40 +250,47 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            <SectionHeader title="Low stock alerts" actionLabel="See all" />
-            <ThemedView type="backgroundElement" style={styles.list}>
-              {loading || !data ? (
-                <SkeletonRows count={3} />
-              ) : data.lowStock.length === 0 ? (
-                <EmptyRow icon="checkmark-circle-outline" text="No low stock alerts." />
-              ) : (
-                data.lowStock.map((item, index) => (
-                  <LowStockRow key={item.id} item={item} divider={index > 0} />
-                ))
-              )}
-            </ThemedView>
+            <View style={[styles.bottomRow, isTablet && styles.bottomRowTablet]}>
+              <View style={[styles.bottomCol, isTablet && styles.bottomColTablet]}>
+                <SectionHeader title="Low stock alerts" actionLabel="See all" />
+                <ThemedView type="backgroundElement" style={styles.list}>
+                  {loading || !data ? (
+                    <SkeletonRows count={3} />
+                  ) : data.lowStock.length === 0 ? (
+                    <EmptyRow icon="checkmark-circle-outline" text="No low stock alerts." />
+                  ) : (
+                    data.lowStock.map((item, index) => (
+                      <LowStockRow key={item.id} item={item} divider={index > 0} />
+                    ))
+                  )}
+                </ThemedView>
+              </View>
 
-            <SectionHeader title="Branches to refill" actionLabel="See all" />
-            <ThemedView type="backgroundElement" style={styles.list}>
-              {loading ? (
-                <SkeletonRows count={3} />
-              ) : branches.length === 0 ? (
-                <EmptyRow
-                  icon="storefront-outline"
-                  text="No branches available."
-                />
-              ) : (
-                branches.map((branch, index) => (
-                  <RefillRow
-                    key={branch.id}
-                    branch={branch}
-                    summary={refillSales[branch.id]}
-                    loading={refillLoading}
-                    divider={index > 0}
-                  />
-                ))
-              )}
-            </ThemedView>
+              <View style={[styles.bottomCol, isTablet && styles.bottomColTablet]}>
+                <SectionHeader title="Branches to refill" actionLabel="See all" />
+                <ThemedView type="backgroundElement" style={styles.list}>
+                  {loading ? (
+                    <SkeletonRows count={3} />
+                  ) : branches.length === 0 ? (
+                    <EmptyRow
+                      icon="storefront-outline"
+                      text="No branches available."
+                    />
+                  ) : (
+                    branches.map((branch, index) => (
+                      <RefillRow
+                        key={branch.id}
+                        branch={branch}
+                        summary={refillSales[branch.id]}
+                        loading={refillLoading}
+                        divider={index > 0}
+                        onPress={() => openBranchRefill(branch)}
+                      />
+                    ))
+                  )}
+                </ThemedView>
+              </View>
+            </View>
           </>
         )}
       </ScrollView>
@@ -345,18 +422,19 @@ function RefillRow({
   summary,
   loading,
   divider,
+  onPress,
 }: {
   branch: Branch;
   summary?: BranchSalesSummary;
   loading: boolean;
   divider: boolean;
+  onPress: () => void;
 }) {
-  const router = useRouter();
   const theme = useTheme();
   const sold = summary && summary.itemCount > 0;
   return (
     <Pressable
-      onPress={() => router.push("/stock-refill")}
+      onPress={onPress}
       accessibilityLabel={`Refill ${branch.name}`}
       style={({ pressed }) => [
         styles.row,
@@ -442,6 +520,20 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     justifyContent: "space-between",
     rowGap: Spacing.three,
+  },
+  // Bottom lists stack on phones, sit side-by-side on tablets.
+  bottomRow: {
+    gap: Spacing.three,
+  },
+  bottomRowTablet: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  bottomCol: {
+    gap: Spacing.three,
+  },
+  bottomColTablet: {
+    flex: 1,
   },
   center: {
     alignItems: "center",

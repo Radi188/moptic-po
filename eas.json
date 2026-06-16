@@ -8,7 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://localhost:8000/api/v1/staff"
+        "EXPO_PUBLIC_API_URL": "https://m-eyewear.com/api/v1/staff"
       }
     },
     "preview": {
@@ -17,7 +17,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_PROD_API/api/v1/staff"
+        "EXPO_PUBLIC_API_URL": "https://m-eyewear.com/api/v1/staff"
       }
     },
     "production": {
@@ -27,7 +27,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE_WITH_PROD_API/api/v1/staff"
+        "EXPO_PUBLIC_API_URL": "https://m-eyewear.com/api/v1/staff"
       }
     }
   },

@@ -37,6 +37,7 @@ import {
   type PurchaseOrderPage,
 } from "@/data/purchase-orders";
 import { SkeletonList } from "@/components/skeleton";
+import { useResponsive } from "@/hooks/use-responsive";
 import { useTheme } from "@/hooks/use-theme";
 
 const BRAND = "#232843";
@@ -51,6 +52,7 @@ export default function PurchaseOrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
 
   const [search, setSearch] = useState("");
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
@@ -162,7 +164,7 @@ export default function PurchaseOrdersScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View>
-          <ThemedText style={styles.title}>Purchase Orders</ThemedText>
+          <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Purchase Orders</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {data.total} orders
           </ThemedText>
@@ -302,16 +304,21 @@ export default function PurchaseOrdersScreen() {
       <FlatList
         data={data.items}
         keyExtractor={(item) => item.id}
+        key={isTablet ? "grid" : "list"}
+        numColumns={isTablet ? 2 : 1}
+        columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <OrderCard
-            order={item}
-            onPress={() => openOrder(item.id)}
-            onLongPress={
-              isApiConfigured() ? undefined : () => editOrder(item.id)
-            }
-          />
+          <View style={isTablet ? styles.gridItem : undefined}>
+            <OrderCard
+              order={item}
+              onPress={() => openOrder(item.id)}
+              onLongPress={
+                isApiConfigured() ? undefined : () => editOrder(item.id)
+              }
+            />
+          </View>
         )}
         ListEmptyComponent={
           loading ? (
@@ -532,6 +539,10 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: "700",
   },
+  titleTablet: {
+    fontSize: 32,
+    lineHeight: 40,
+  },
   newButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -594,6 +605,12 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: MaxContentWidth,
     alignSelf: "center",
+  },
+  columnWrapper: {
+    gap: Spacing.three,
+  },
+  gridItem: {
+    flex: 1,
   },
   empty: {
     textAlign: "center",

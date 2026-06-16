@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 
-import { API_BASE_URL } from '@/api/config';
+import { getBaseUrl } from '@/api/config';
 import { tokenStore } from '@/auth/tokenStore';
 
 export class ApiError extends Error {
@@ -18,15 +18,16 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
 }
 
-// API_BASE_URL already includes the full prefix (e.g. .../api/v1/staff),
-// so paths are relative to it (e.g. '/login', '/stock-dashboard').
+// The base URL is resolved per request via getBaseUrl(), so a runtime override
+// takes effect immediately. It already includes the full prefix
+// (e.g. .../api/v1/staff), so paths are relative to it ('/login', etc.).
 export const api = axios.create({
-  baseURL: API_BASE_URL,
   headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
 });
 
-// Attach the Bearer token to every request automatically.
+// Resolve the current base URL and attach the Bearer token on every request.
 api.interceptors.request.use(async (config) => {
+  config.baseURL = getBaseUrl();
   const token = await tokenStore.get();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;

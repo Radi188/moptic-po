@@ -1,6 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,6 +19,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { useThemePreference, type ThemePreference } from '@/contexts/theme';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -40,6 +49,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
   const { session, switchBranch, signOut } = useAuth();
   const { preference, setPreference } = useThemePreference();
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
@@ -57,7 +67,7 @@ export default function SettingsScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
-        <ThemedText style={styles.title}>Settings</ThemedText>
+        <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Settings</ThemedText>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
@@ -80,7 +90,8 @@ export default function SettingsScreen() {
           </View>
         </ThemedView>
 
-        <Section title="Operations">
+        <View style={[styles.sectionGrid, isTablet && styles.sectionGridTablet]}>
+        <Section title="Operations" style={isTablet ? styles.sectionTablet : undefined}>
           <SettingRow
             icon="create-outline"
             color="#F5A623"
@@ -105,7 +116,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="Reports">
+        <Section title="Reports" style={isTablet ? styles.sectionTablet : undefined}>
           <SettingRow
             icon="layers-outline"
             color="#30A46C"
@@ -123,7 +134,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="Account">
+        <Section title="Account" style={isTablet ? styles.sectionTablet : undefined}>
           <SettingRow
             icon="git-branch-outline"
             color="#30A46C"
@@ -142,7 +153,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="Preferences">
+        <Section title="Preferences" style={isTablet ? styles.sectionTablet : undefined}>
           <SettingRow
             icon="notifications-outline"
             color="#F5A623"
@@ -161,7 +172,7 @@ export default function SettingsScreen() {
           />
         </Section>
 
-        <Section title="About">
+        <Section title="About" style={isTablet ? styles.sectionTablet : undefined}>
           <SettingRow
             icon="help-circle-outline"
             color="#30A46C"
@@ -179,6 +190,7 @@ export default function SettingsScreen() {
             last
           />
         </Section>
+        </View>
 
         <Pressable
           onPress={confirmSignOut}
@@ -213,9 +225,17 @@ export default function SettingsScreen() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  style,
+}: {
+  title: string;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, style]}>
       <ThemedText type="small" themeColor="textSecondary" style={styles.sectionTitle}>
         {title}
       </ThemedText>
@@ -277,6 +297,10 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: '700',
   },
+  titleTablet: {
+    fontSize: 32,
+    lineHeight: 40,
+  },
   body: {
     paddingHorizontal: Spacing.four,
     paddingBottom: BottomTabInset + Spacing.four,
@@ -317,8 +341,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.one,
   },
+  // Sections stack on phones; on tablets they flow into a two-column grid.
+  sectionGrid: {
+    gap: Spacing.four,
+  },
+  sectionGridTablet: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
   section: {
     gap: Spacing.two,
+  },
+  sectionTablet: {
+    width: '48%',
   },
   sectionTitle: {
     marginLeft: Spacing.one,

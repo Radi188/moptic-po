@@ -14,6 +14,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { SkeletonList } from '@/components/skeleton';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 import { deleteProduct, formatMoney, type InventoryProduct } from '@/data/inventory';
 
@@ -23,6 +24,7 @@ export default function InventoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { isTablet } = useResponsive();
   const { session } = useAuth();
   const branchId = session?.branch.id;
 
@@ -97,7 +99,7 @@ export default function InventoryScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View>
-          <ThemedText style={styles.title}>Inventory</ThemedText>
+          <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Inventory</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {total} products
           </ThemedText>
@@ -133,16 +135,21 @@ export default function InventoryScreen() {
       <FlatList
         data={items}
         keyExtractor={(item, index) => `${item.id}-${index}`}
+        key={isTablet ? 'grid' : 'list'}
+        numColumns={isTablet ? 2 : 1}
+        columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         onEndReachedThreshold={0.4}
         onEndReached={loadMore}
         renderItem={({ item }) => (
-          <ProductCard
-            product={item}
-            onPress={() => setSelected(item)}
-            onLongPress={isApiConfigured() ? undefined : () => editProduct(item.id)}
-          />
+          <View style={isTablet ? styles.gridItem : undefined}>
+            <ProductCard
+              product={item}
+              onPress={() => setSelected(item)}
+              onLongPress={isApiConfigured() ? undefined : () => editProduct(item.id)}
+            />
+          </View>
         )}
         ListEmptyComponent={
           loading ? (
@@ -252,6 +259,10 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     fontWeight: '700',
   },
+  titleTablet: {
+    fontSize: 32,
+    lineHeight: 40,
+  },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -291,6 +302,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
+  },
+  columnWrapper: {
+    gap: Spacing.three,
+  },
+  gridItem: {
+    flex: 1,
   },
   empty: {
     textAlign: 'center',
