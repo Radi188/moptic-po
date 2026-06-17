@@ -185,7 +185,13 @@ export default function BranchRefillScreen() {
    * so a delivery failure is surfaced as an alert but never blocks completion.
    */
   async function sendRefillReport(items: { row: SoldItem; qty: number }[]) {
-    if (!isTelegramConfigured()) return;
+    if (!isTelegramConfigured()) {
+      Alert.alert(
+        'Telegram not configured',
+        'The Telegram bot token / chat ID are missing in this build, so the refill report was not sent.',
+      );
+      return;
+    }
     try {
       const reportRows = items.map(({ row, qty }) =>
         toReportRow(row.itemName, row.qtySold, qty),

@@ -13,6 +13,9 @@ export const tokenStore = {
     return SecureStore.getItemAsync(TOKEN_KEY);
   },
   async set(token: string): Promise<void> {
+    // SecureStore only accepts strings — guard so a missing/invalid token never
+    // throws "Values must be strings" and crashes the login flow.
+    if (typeof token !== 'string' || token.length === 0) return;
     if (Platform.OS === 'web') {
       globalThis.localStorage?.setItem(TOKEN_KEY, token);
       return;

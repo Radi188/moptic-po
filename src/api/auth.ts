@@ -32,7 +32,20 @@ export type LoginResponse = {
 
 /** POST /login (relative to /api/v1/staff) — authenticates and persists the token. */
 export async function login(payload: LoginPayload): Promise<LoginResponse> {
-  const { data } = await api.post<LoginResponse>('/login', payload);
+  let { data } = await api.post<LoginResponse>('/login', payload);
+
+  // The backend occasionally returns an empty token on the very first call of a
+  // fresh session; a single retry (what users were doing manually) yields a
+  // valid token. A wrong-credentials response rejects above, so this only runs
+  // on an otherwise-successful login that's missing its token.
+  if (!data || typeof data.token !== 'string' || data.token.length === 0) {
+    ({ data } = await api.post<LoginResponse>('/login', payload));
+  }
+
+  if (!data || typeof data.token !== 'string' || data.token.length === 0) {
+    throw new Error('Sign-in failed: no session token was returned. Please try again.');
+  }
+
   await tokenStore.set(data.token);
   return data;
 }

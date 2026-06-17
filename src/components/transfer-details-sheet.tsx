@@ -1,13 +1,18 @@
 import { Image } from 'expo-image';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { fetchBranchSales } from '@/api/daily-sales';
 import { Skeleton, SkeletonRows } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/contexts/auth';
 import { useTheme } from '@/hooks/use-theme';
+import { generateRefillReportPdf, toReportRow } from '@/lib/refill-report';
+import { isTelegramConfigured, sendTelegramDocument } from '@/lib/telegram';
 import {
   canEditTransfer,
   formatDateTime,
@@ -38,8 +43,41 @@ export function TransferDetailsSheet({
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { session } = useAuth();
+  const [sending, setSending] = useState(false);
   const meta = transfer ? STATUS_META[transfer.status] : null;
   const editable = transfer ? canEditTransfer(transfer.status) : false;
+
+  // Manually (re)send the transfer's report to the Telegram group — a recovery
+  // path when the automatic send at refill time failed.
+  async function handleSendTelegram() {
+    if (!transfer || sending) return;
+    if (!isTelegramConfigured()) {
+      Alert.alert(
+        'Telegram not configured',
+        'The Telegram bot token / chat ID are missing in this build, so the report cannot be sent.',
+      );
+      return;
+    }
+    setSending(true);
+    try {
+      const { rows, reportMeta } = await buildTransferReport(
+        transfer,
+        session?.branches ?? [],
+      );
+      const uri = await generateRefillReportPdf(rows, reportMeta);
+      await sendTelegramDocument({
+        uri,
+        filename: `transfer-${transfer.reference || transfer.id}.pdf`,
+        caption: `Stock transfer ${transfer.reference} — ${reportMeta.branchName}`,
+      });
+      Alert.alert('Sent', 'The report was sent to the Telegram group.');
+    } catch (e) {
+      Alert.alert('Failed to send', e instanceof Error ? e.message : 'Unknown error.');
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -95,6 +133,26 @@ export function TransferDetailsSheet({
                 ))}
               </ScrollView>
 
+              <Pressable
+                onPress={handleSendTelegram}
+                disabled={sending}
+                style={({ pressed }) => [
+                  styles.telegramButton,
+                  { backgroundColor: theme.tintSoft },
+                  (pressed || sending) && styles.pressed,
+                ]}>
+                {sending ? (
+                  <ActivityIndicator color={theme.tint} />
+                ) : (
+                  <>
+                    <Ionicons name="paper-plane-outline" size={18} color={theme.tint} />
+                    <ThemedText style={[styles.telegramText, { color: theme.tint }]}>
+                      Send report to Telegram
+                    </ThemedText>
+                  </>
+                )}
+              </Pressable>
+
               {editable ? (
                 <View style={styles.actions}>
                   <Pressable
@@ -121,6 +179,62 @@ export function TransferDetailsSheet({
       </View>
     </Modal>
   );
+}
+
+/**
+ * Rebuild the refill report for a transfer. For a daily refill (its description
+ * carries the branch + sales date) it re-fetches that day's branch sales so the
+ * Less/Over columns are accurate; otherwise it falls back to just the
+ * transferred items.
+ */
+async function buildTransferReport(
+  transfer: StockTransfer,
+  branches: { id: string; name: string }[],
+) {
+  const salesDate =
+    transfer.description.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? transfer.transactionDate.slice(0, 10);
+  const branch = branches.find(
+    (b) =>
+      b.name === transfer.toWarehouse ||
+      transfer.toWarehouse.includes(b.name) ||
+      transfer.description.includes(b.name),
+  );
+
+  const transferredQty = new Map<string, number>();
+  for (const it of transfer.items) {
+    if (it.itemId) transferredQty.set(it.itemId, it.qty);
+    if (it.itemCode) transferredQty.set(it.itemCode, it.qty);
+  }
+
+  let rows: ReturnType<typeof toReportRow>[] | null = null;
+  if (branch) {
+    try {
+      const sales = await fetchBranchSales({ date: salesDate, branchId: branch.id });
+      if (sales.items.length > 0) {
+        rows = sales.items.map((s) =>
+          toReportRow(
+            s.itemName,
+            s.qtySold,
+            transferredQty.get(s.itemId) ?? transferredQty.get(s.itemCode) ?? 0,
+          ),
+        );
+      }
+    } catch {
+      // Fall back to the transferred items below.
+    }
+  }
+  if (!rows) {
+    rows = transfer.items.map((it) => toReportRow(it.itemName, it.qty, it.qty));
+  }
+
+  const reportMeta = {
+    branchName: branch?.name ?? transfer.toWarehouse,
+    sourceName: transfer.fromWarehouse,
+    date: salesDate,
+    createdDate: transfer.transactionDate.slice(0, 10),
+    bmName: '',
+  };
+  return { rows, reportMeta };
 }
 
 function InfoRow({
@@ -281,6 +395,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Spacing.two,
+  },
+  telegramButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    height: 48,
+    borderRadius: Spacing.three,
+  },
+  telegramText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   actions: {
     flexDirection: 'row',
