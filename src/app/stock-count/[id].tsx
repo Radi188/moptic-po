@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   TextInput,
   View,
@@ -70,6 +71,7 @@ export default function StockCountDetailScreen() {
   const [onlyDiscrepancy, setOnlyDiscrepancy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
@@ -133,6 +135,12 @@ export default function StockCountDetailScreen() {
     if (loading || loadingMore || page >= lastPage) return;
     load(search, onlyDiscrepancy, page + 1, true);
   }
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadHeader();
+    load(search, onlyDiscrepancy, 1, false).finally(() => setRefreshing(false));
+  }, [loadHeader, load, search, onlyDiscrepancy]);
 
   // Display helpers that prefer local edits, falling back to persisted values.
   const countedOf = (it: StockCountItem) =>
@@ -244,6 +252,14 @@ export default function StockCountDetailScreen() {
           showsVerticalScrollIndicator={false}
           onEndReachedThreshold={0.4}
           onEndReached={loadMore}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.textSecondary}
+              colors={[theme.tint]}
+            />
+          }
           ListHeaderComponent={
             <View style={styles.headerArea}>
               {header && <TotalsCard header={header} theme={theme} />}

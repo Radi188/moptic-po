@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -76,6 +77,7 @@ export default function TransfersScreen() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
 
@@ -123,6 +125,11 @@ export default function TransfersScreen() {
     if (loading || loadingMore || page >= lastPage) return;
     load(search, status, page + 1, true);
   }
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load(search, status, 1, false).finally(() => setRefreshing(false));
+  }, [load, search, status]);
 
   function newTransfer() {
     router.push({ pathname: '/transfer/[id]', params: { id: 'new' } });
@@ -231,6 +238,14 @@ export default function TransfersScreen() {
         showsVerticalScrollIndicator={false}
         onEndReachedThreshold={0.4}
         onEndReached={loadMore}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.tint]}
+          />
+        }
         renderItem={({ item }) => (
           <View style={isTablet ? styles.gridItem : undefined}>
             <TransferCard

@@ -150,13 +150,14 @@ export default function StockRefillScreen() {
       setError('Please select a source warehouse first.');
       return;
     }
+    // The refill is a warehouse→warehouse transfer. The destination warehouse is
+    // resolved (and can be corrected) on the branch screen, because branch ids
+    // and warehouse ids are different namespaces in this backend.
     router.push({
       pathname: '/stock-refill/[branchId]',
       params: {
         branchId: branch.id,
         branchName: branch.name,
-        // Branches map 1:1 to a warehouse with the same id in this backend.
-        warehouseId: branch.id,
         date: ymd(date),
         sourceId: source.id,
         sourceName: source.name,

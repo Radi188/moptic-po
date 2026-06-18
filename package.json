@@ -1,7 +1,7 @@
 {
   "name": "moptic",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "dependencies": {
     "@expo/ui": "~56.0.17",
     "@react-native-community/datetimepicker": "9.1.0",

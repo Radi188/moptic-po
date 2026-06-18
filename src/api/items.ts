@@ -30,7 +30,20 @@ type RawItem = {
   thumbnail?: string | null;
 };
 
-type RawPage = { current_page?: number; last_page?: number; data?: RawItem[] } | RawItem[];
+type RawPaginator = {
+  current_page?: number;
+  last_page?: number;
+  data?: RawItem[];
+  meta?: { current_page?: number; last_page?: number };
+};
+
+// The list ('/items') and search ('/items/search') endpoints wrap their rows
+// differently, so accept a bare array, a paginator, a paginator nested under
+// `data` (resource collection), or rows under `items`/`results`.
+type RawPage =
+  | RawPaginator
+  | RawItem[]
+  | { data?: RawPaginator; items?: RawItem[]; results?: RawItem[] };
 
 function mapItem(row: RawItem): ApiItem {
   // The purchase-order endpoint references products by `item_id`; fall back to `id`.
@@ -44,10 +57,26 @@ function mapItem(row: RawItem): ApiItem {
 }
 
 function mapPage(raw: RawPage): ItemsPage {
-  const list = Array.isArray(raw) ? raw : (raw.data ?? []);
-  const page = Array.isArray(raw) ? 1 : (raw.current_page ?? 1);
-  const lastPage = Array.isArray(raw) ? 1 : (raw.last_page ?? 1);
-  return { items: list.map(mapItem), page, lastPage };
+  if (Array.isArray(raw)) {
+    return { items: raw.map(mapItem), page: 1, lastPage: 1 };
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const nested = obj.data;
+  const paginator: RawPaginator =
+    nested && !Array.isArray(nested) && typeof nested === 'object'
+      ? (nested as RawPaginator)
+      : (raw as RawPaginator);
+
+  const list =
+    paginator.data ??
+    (Array.isArray(nested) ? (nested as RawItem[]) : undefined) ??
+    (obj.items as RawItem[] | undefined) ??
+    (obj.results as RawItem[] | undefined) ??
+    [];
+
+  const meta = paginator.meta ?? paginator;
+  return { items: list.map(mapItem), page: meta.current_page ?? 1, lastPage: meta.last_page ?? 1 };
 }
 
 // Mock catalog used when no API URL is configured.
@@ -62,7 +91,15 @@ const MOCK_ITEMS: ApiItem[] = PRODUCTS.map((p) => ({
 export async function fetchItems(page = 1): Promise<ItemsPage> {
   if (!isApiConfigured()) return { items: MOCK_ITEMS, page: 1, lastPage: 1 };
   const { data } = await api.get<RawPage>('/items', { params: { page } });
-  return mapPage(data);
+  const result = mapPage(data);
+  if (__DEV__) {
+    const top = Array.isArray(data) ? '[array]' : Object.keys(data ?? {}).join(', ');
+    console.log(`[items] GET /items page=${page} → keys: {${top}} · mapped ${result.items.length}`);
+    if (result.items.length === 0) {
+      console.log('[items] empty result, raw body:', JSON.stringify(data)?.slice(0, 800));
+    }
+  }
+  return result;
 }
 
 /** GET /items/search?q=&page= (paginated). */

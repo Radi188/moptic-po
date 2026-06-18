@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { fetchLossSummary, type LossSummaryRow } from '@/api/stock-count';
@@ -33,12 +33,13 @@ export default function LossSummaryScreen() {
   });
   const [rows, setRows] = useState<LossSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback((d: Date) => {
     setLoading(true);
     setError(null);
-    fetchLossSummary({ month: monthKey(d) })
+    return fetchLossSummary({ month: monthKey(d) })
       .then(setRows)
       .catch((e) => {
         setError(e instanceof Error ? e.message : 'Failed to load loss report.');
@@ -50,6 +51,11 @@ export default function LossSummaryScreen() {
   useEffect(() => {
     load(month);
   }, [month, load]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load(month).finally(() => setRefreshing(false));
+  }, [load, month]);
 
   function shiftMonth(delta: number) {
     setMonth((prev) => {
@@ -96,6 +102,14 @@ export default function LossSummaryScreen() {
         keyExtractor={(item, index) => `${item.branchId}-${index}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.tint]}
+          />
+        }
         renderItem={({ item }) => <LossCard row={item} theme={theme} />}
         ListEmptyComponent={
           loading ? (

@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   StyleSheet,
   View,
 } from "react-native";
@@ -75,6 +76,7 @@ export default function PurchaseOrdersScreen() {
     page: 1,
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [detailVisible, setDetailVisible] = useState(false);
@@ -91,7 +93,7 @@ export default function PurchaseOrdersScreen() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetchPurchaseOrders({
+    return fetchPurchaseOrders({
       page,
       search,
       warehouse,
@@ -105,8 +107,19 @@ export default function PurchaseOrdersScreen() {
       .finally(() => setLoading(false));
   }, [page, search, warehouse, dateFrom, dateTo]);
 
-  useEffect(() => load(), [load]);
-  useFocusEffect(load);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load().finally(() => setRefreshing(false));
+  }, [load]);
 
   function changeSearch(text: string) {
     setSearch(text);
@@ -309,6 +322,14 @@ export default function PurchaseOrdersScreen() {
         columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.tint]}
+          />
+        }
         renderItem={({ item }) => (
           <View style={isTablet ? styles.gridItem : undefined}>
             <OrderCard

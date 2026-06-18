@@ -3,6 +3,7 @@ import { createContext, use, useEffect, useMemo, useState, type PropsWithChildre
 import { login, logout, type ApiBranch } from '@/api/auth';
 import { setUnauthorizedHandler } from '@/api/client';
 import { isApiConfigured } from '@/api/config';
+import { tokenStore } from '@/auth/tokenStore';
 import { BRANCHES, type Branch } from '@/constants/branches';
 import { storage } from '@/lib/storage';
 
@@ -33,6 +34,23 @@ type AuthContextValue = {
 
 function toBranch(branch: ApiBranch): Branch {
   return { id: String(branch.id), name: branch.branch_name, location: branch.address };
+}
+
+/**
+ * Map the API branches and drop duplicate ids. The backend can return the same
+ * branch more than once, which otherwise yields React "duplicate key" warnings
+ * (and ambiguous selections) wherever the branch list is rendered.
+ */
+function toBranches(apiBranches: ApiBranch[]): Branch[] {
+  const seen = new Set<string>();
+  const result: Branch[] = [];
+  for (const b of apiBranches) {
+    const branch = toBranch(b);
+    if (seen.has(branch.id)) continue;
+    seen.add(branch.id);
+    result.push(branch);
+  }
+  return result;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -70,8 +88,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let active = true;
     storage
       .getItem(SESSION_KEY)
-      .then((raw) => {
-        if (active && raw) setSession(JSON.parse(raw) as Session);
+      .then(async (raw) => {
+        if (!active || !raw) return;
+        const parsed = JSON.parse(raw) as Session;
+        setSession(parsed);
+        // The request interceptor reads the token from tokenStore (SecureStore),
+        // which is a *separate* store from the persisted session. A single 401
+        // clears tokenStore but leaves the session, so on the next launch the app
+        // would look signed in yet send no token — every request 401s and the
+        // "Session expired" modal sticks. Re-seed tokenStore from the session to
+        // keep the two in sync.
+        if (parsed.token) await tokenStore.set(parsed.token);
       })
       .catch(() => {})
       .finally(() => {
@@ -99,7 +126,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (isApiConfigured()) {
           // POST /login { name, password }
           const res = await login({ name: username.trim(), password });
-          const branches = res.branches.map(toBranch);
+          const branches = toBranches(res.branches);
           if (branches.length === 0) {
             throw new Error('No branch is assigned to this account.');
           }

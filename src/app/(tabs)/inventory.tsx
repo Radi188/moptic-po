@@ -1,7 +1,15 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -35,17 +43,21 @@ export default function InventoryScreen() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<InventoryProduct | null>(null);
   const requestId = useRef(0);
 
   const load = useCallback(
-    async (q: string, nextPage: number, append: boolean) => {
+    async (q: string, nextPage: number, append: boolean, reset = false) => {
       const id = ++requestId.current;
       if (append) setLoadingMore(true);
       else {
         setLoading(true);
         setError(null);
+        // Clear the current rows so the skeleton shows while a fresh result
+        // loads (e.g. after clearing the search to get all items back).
+        if (reset) setItems([]);
       }
       try {
         const result = await fetchInventory({ page: nextPage, search: q, branchId });
@@ -70,8 +82,9 @@ export default function InventoryScreen() {
   );
 
   // Initial load + debounced search; reloads when the active branch changes.
+  // `reset` clears the list first so the skeleton shows on a fresh search.
   useEffect(() => {
-    const t = setTimeout(() => load(search, 1, false), search ? 350 : 0);
+    const t = setTimeout(() => load(search, 1, false, true), search ? 350 : 0);
     return () => clearTimeout(t);
   }, [search, load]);
 
@@ -79,6 +92,11 @@ export default function InventoryScreen() {
     if (loading || loadingMore || page >= lastPage) return;
     load(search, page + 1, true);
   }
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load(search, 1, false).finally(() => setRefreshing(false));
+  }, [load, search]);
 
   function newProduct() {
     router.push({ pathname: '/inventory-item/[id]', params: { id: 'new' } });
@@ -142,6 +160,14 @@ export default function InventoryScreen() {
         showsVerticalScrollIndicator={false}
         onEndReachedThreshold={0.4}
         onEndReached={loadMore}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.tint]}
+          />
+        }
         renderItem={({ item }) => (
           <View style={isTablet ? styles.gridItem : undefined}>
             <ProductCard

@@ -1,6 +1,13 @@
 import { useRouter, type Href } from "expo-router";
-import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
 import { fetchBranchSales, type BranchSalesSummary } from "@/api/daily-sales";
@@ -90,6 +97,7 @@ export default function HomeScreen() {
     Record<string, BranchSalesSummary>
   >({});
   const [refillLoading, setRefillLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [source, setSource] = useState<ApiOption | null>(null);
 
   // Resolve the default source warehouse so a branch tap can jump straight
@@ -110,35 +118,20 @@ export default function HomeScreen() {
     };
   }, []);
 
-  // Re-fetch whenever the active branch changes (header / settings switch).
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
+  // Dashboard stats / low-stock for the active branch.
+  const loadDashboard = useCallback(async () => {
     setError(null);
-    fetchStockDashboard(branchId)
-      .then((result) => {
-        if (active) setData(result);
-      })
-      .catch((e) => {
-        if (active)
-          setError(
-            e instanceof Error ? e.message : "Failed to load dashboard.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    try {
+      setData(await fetchStockDashboard(branchId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load dashboard.");
+    }
   }, [branchId]);
 
   // Yesterday's sales per branch, to surface which branches need a refill.
-  useEffect(() => {
-    let active = true;
-    setRefillLoading(true);
+  const loadRefill = useCallback(async () => {
     const date = ymd(yesterday());
-    Promise.all(
+    const results = await Promise.all(
       branches.map(async (b) => {
         try {
           const res = await fetchBranchSales({ date, branchId: b.id });
@@ -147,20 +140,29 @@ export default function HomeScreen() {
           return [b.id, null] as const;
         }
       }),
-    )
-      .then((results) => {
-        if (!active) return;
-        const map: Record<string, BranchSalesSummary> = {};
-        for (const [bid, summary] of results) if (summary) map[bid] = summary;
-        setRefillSales(map);
-      })
-      .finally(() => {
-        if (active) setRefillLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+    );
+    const map: Record<string, BranchSalesSummary> = {};
+    for (const [bid, summary] of results) if (summary) map[bid] = summary;
+    setRefillSales(map);
   }, [branches]);
+
+  // Re-fetch whenever the active branch changes (header / settings switch).
+  useEffect(() => {
+    setLoading(true);
+    loadDashboard().finally(() => setLoading(false));
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    setRefillLoading(true);
+    loadRefill().finally(() => setRefillLoading(false));
+  }, [loadRefill]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    Promise.all([loadDashboard(), loadRefill()]).finally(() =>
+      setRefreshing(false),
+    );
+  }, [loadDashboard, loadRefill]);
 
   // Tapping a branch jumps straight into its refill screen for yesterday's
   // sales. With no sales, prompt the user to create a stock transfer instead.
@@ -208,6 +210,14 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.textSecondary}
+            colors={[theme.tint]}
+          />
+        }
       >
         <ThemedText type="small" themeColor="textSecondary">
           Welcome back{session ? `, ${session.username}` : ""} — here&apos;s
@@ -279,7 +289,7 @@ export default function HomeScreen() {
                   ) : (
                     branches.map((branch, index) => (
                       <RefillRow
-                        key={branch.id}
+                        key={`${branch.id}-${index}`}
                         branch={branch}
                         summary={refillSales[branch.id]}
                         loading={refillLoading}

@@ -15,8 +15,10 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { fetchBranchSales, type SoldItem } from '@/api/daily-sales';
+import { getWarehouses, type ApiOption } from '@/api/purchase-orders';
 import { fetchWarehouseStockMap } from '@/api/stock-on-hand';
 import { createTransfer, type CreateTransferBody } from '@/api/transfers';
+import { OptionSheet } from '@/components/option-sheet';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -44,11 +46,30 @@ function nowDateTime() {
   return `${ymd(d)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
+/**
+ * Resolve a branch's destination warehouse from the warehouse list. Branch ids
+ * and warehouse ids are *different* namespaces in this backend (a branch id can
+ * collide with an unrelated warehouse id), so we match on name the same way the
+ * transfer report does: exact name, then either side containing the other. The
+ * source warehouse is excluded so we never default to a self-transfer.
+ */
+function findBranchWarehouse(
+  branchName: string,
+  warehouses: ApiOption[],
+  sourceId: string,
+): ApiOption | null {
+  const pool = warehouses.filter((w) => w.id !== sourceId);
+  return (
+    pool.find((w) => w.name === branchName) ??
+    pool.find((w) => w.name.includes(branchName) || branchName.includes(w.name)) ??
+    null
+  );
+}
+
 export default function BranchRefillScreen() {
   const params = useLocalSearchParams<{
     branchId: string;
     branchName: string;
-    warehouseId: string;
     date: string;
     sourceId: string;
     sourceName: string;
@@ -66,6 +87,29 @@ export default function BranchRefillScreen() {
   const [stockLoading, setStockLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Destination warehouse: the branch's own warehouse, picked from the live
+  // warehouse list (NOT the branch id). It defaults to a name match but stays
+  // editable so the user can correct it before transferring.
+  const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [destination, setDestination] = useState<ApiOption | null>(null);
+  const [destSheet, setDestSheet] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getWarehouses()
+      .then((options) => {
+        if (!active) return;
+        setWarehouseOptions(options);
+        setDestination(
+          (prev) => prev ?? findBranchWarehouse(params.branchName, options, params.sourceId),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [params.branchName, params.sourceId]);
 
   useEffect(() => {
     let active = true;
@@ -121,7 +165,11 @@ export default function BranchRefillScreen() {
 
   async function handleTransfer() {
     if (submitting) return;
-    if (params.sourceId === params.warehouseId) {
+    if (!destination) {
+      setError('Select a destination warehouse first.');
+      return;
+    }
+    if (params.sourceId === destination.id) {
       setError('Source and destination warehouses are the same.');
       return;
     }
@@ -144,7 +192,7 @@ export default function BranchRefillScreen() {
 
     const body: CreateTransferBody = {
       from_warehouse: Number(params.sourceId),
-      to_warehouse: Number(params.warehouseId),
+      to_warehouse: Number(destination.id),
       branch_login_id: Number(session?.branch.id ?? 0),
       // The transfer is stamped with the exact moment it's created (now), not
       // the sales day. The sales date is kept in the description for reference.
@@ -242,14 +290,23 @@ export default function BranchRefillScreen() {
               </ThemedText>
             </View>
             <Ionicons name="arrow-forward" size={18} color={theme.textSecondary} />
-            <View style={styles.routeCol}>
+            <Pressable
+              style={styles.routeCol}
+              onPress={() => setDestSheet(true)}
+              hitSlop={Spacing.two}>
               <ThemedText type="small" themeColor="textSecondary">
-                To
+                To warehouse
               </ThemedText>
-              <ThemedText type="smallBold" numberOfLines={1}>
-                {params.branchName || `Branch ${params.branchId}`}
-              </ThemedText>
-            </View>
+              <View style={styles.destValueRow}>
+                <ThemedText
+                  type="smallBold"
+                  numberOfLines={1}
+                  style={[styles.destValue, { color: destination ? theme.text : theme.textSecondary }]}>
+                  {destination?.name ?? 'Select warehouse'}
+                </ThemedText>
+                <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
+              </View>
+            </Pressable>
           </ThemedView>
 
           <View style={styles.fieldGroup}>
@@ -339,6 +396,19 @@ export default function BranchRefillScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      <OptionSheet
+        visible={destSheet}
+        title="Destination warehouse"
+        options={warehouseOptions.filter((o) => o.id !== params.sourceId).map((o) => o.name)}
+        selected={destination?.name}
+        onSelect={(value) => {
+          setDestination(warehouseOptions.find((o) => o.name === value) ?? null);
+          setError(null);
+          setDestSheet(false);
+        }}
+        onClose={() => setDestSheet(false)}
+      />
     </ThemedView>
   );
 }
@@ -458,6 +528,14 @@ const styles = StyleSheet.create({
   routeCol: {
     flex: 1,
     gap: Spacing.half,
+  },
+  destValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  destValue: {
+    flexShrink: 1,
   },
   fieldGroup: {
     gap: Spacing.one,
