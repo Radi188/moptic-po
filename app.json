@@ -3,13 +3,19 @@
     "name": "M Optic-PO",
     "slug": "moptic",
     "version": "1.0.2",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4c4ede3a-dcdd-4872-bfdc-3f7095b81857"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/logo-staff.png",
     "scheme": "moptic",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.moptic.staff",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
