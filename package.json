@@ -49,12 +49,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-
     "build:ios": "eas build --platform ios --profile production",
     "build:android": "eas build --platform android --profile production",
     "build:all": "eas build --platform all --profile production",
     "build:preview": "eas build --platform android --profile preview",
-
     "ota:prod": "eas update --channel production --auto",
     "ota:preview": "eas update --channel preview --auto",
     "ota:list": "eas update:list --branch production"
