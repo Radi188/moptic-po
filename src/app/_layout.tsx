@@ -8,6 +8,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { QuickLoginModal } from '@/components/quick-login-modal';
 import { AuthProvider, useAuth } from '@/contexts/auth';
 import { AppThemeProvider, useThemePreference } from '@/contexts/theme';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 // Keep the native splash up until we know whether the user is signed in,
 // so we never flash the login screen at an already-authenticated user.
@@ -15,6 +16,9 @@ SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
   const { session, isLoading } = useAuth();
+  // Once signed in, request permission, get the Expo push token and register it
+  // with the backend; also mounts the foreground/tap notification listeners.
+  usePushNotifications();
   // react-native-vector-icons ships the font files; load them so glyphs render
   // in Expo Go without native linking.
   const [fontsLoaded] = useFonts({
