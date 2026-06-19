@@ -30,7 +30,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://m-eyewear.com/api/v1/staff"
+        "EXPO_PUBLIC_API_URL": "https://m-eyewear.com/api/v1/staff",
+        "EXPO_PUBLIC_TELEGRAM_BOT_TOKEN": "8944132127:AAF3U4-ANjfzJ1PzqbmT3spX-k-3kJzHYTE",
+        "EXPO_PUBLIC_TELEGRAM_CHAT_ID": "-5050099663"
       }
     }
   },
