@@ -256,6 +256,10 @@ export type StockCountItemQuery = {
   page?: number;
   search?: string;
   onlyDiscrepancy?: boolean;
+  /** Main category id to filter by (empty/undefined = all categories). */
+  categoryId?: string;
+  /** Page size. Pass a large value to load all items in one request. */
+  perPage?: number;
 };
 
 /** GET /stock-counts/{id}/items — line items. */
@@ -264,12 +268,16 @@ export async function fetchStockCountItems({
   page = 1,
   search = '',
   onlyDiscrepancy,
+  categoryId,
+  perPage,
 }: StockCountItemQuery): Promise<StockCountItemPage> {
   const { data } = await api.get<RawItemPage>(`/stock-counts/${id}/items`, {
     params: {
       page,
+      per_page: perPage,
       search: search.trim() || undefined,
       only: onlyDiscrepancy ? 'discrepancy' : undefined,
+      category_id: categoryId || undefined,
     },
   });
   return mapItemPage(data);

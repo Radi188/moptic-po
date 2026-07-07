@@ -49,6 +49,8 @@ function RootNavigator() {
         <Stack.Screen name="transfer/[id]" />
         <Stack.Screen name="stock-report" />
         <Stack.Screen name="stock-on-hand" />
+        <Stack.Screen name="sale-summary-report" />
+        <Stack.Screen name="transfer-in-report" />
         <Stack.Screen name="stock-count/index" />
         <Stack.Screen name="stock-count/new" />
         <Stack.Screen name="stock-count/[id]" />

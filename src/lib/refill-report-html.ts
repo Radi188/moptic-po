@@ -63,26 +63,19 @@ const COLUMNS = [
   'ឈ្មោះ BM<br/><span class="en">BM name</span>',
 ];
 
-export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillReportMeta) {
-  const cell = (n: number) => (n > 0 ? String(n) : '–');
+/**
+ * Grouping key: the product name's first 5 letters, lowercased with spaces
+ * stripped so "Ray Ban" and "RayBan" group together. Names shorter than 5
+ * letters use whatever they have.
+ */
+function groupKey(name: string) {
+  return name.replace(/\s+/g, '').toLowerCase().slice(0, 5);
+}
 
-  const body = rows
-    .map(
-      (r, i) => `
-      <tr>
-        <td class="num">${i + 1}</td>
-        <td class="name">${esc(r.productName)}</td>
-        <td>${esc(r.branchSale)}</td>
-        <td>${esc(r.transferOut)}</td>
-        <td>${esc(r.branchToGet)}</td>
-        <td class="${r.less > 0 ? 'warn' : 'muted'}">${cell(r.less)}</td>
-        <td class="${r.over > 0 ? 'warn' : 'muted'}">${cell(r.over)}</td>
-        <td>${esc(meta.bmName || '–')}</td>
-      </tr>`,
-    )
-    .join('');
+type Totals = { sale: number; out: number; get: number; less: number; over: number };
 
-  const totals = rows.reduce(
+function sumRows(rows: RefillReportRow[]): Totals {
+  return rows.reduce<Totals>(
     (acc, r) => ({
       sale: acc.sale + r.branchSale,
       out: acc.out + r.transferOut,
@@ -92,6 +85,72 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
     }),
     { sale: 0, out: 0, get: 0, less: 0, over: 0 },
   );
+}
+
+export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillReportMeta) {
+  const cell = (n: number) => (n > 0 ? String(n) : '–');
+
+  // Group rows whose product names share the same first 5 letters. Order the
+  // groups by that key, keeping the incoming (already A–Z by name) order within
+  // each group. `label` shows the shared prefix taken from the first product.
+  const groups = new Map<string, { label: string; rows: RefillReportRow[] }>();
+  for (const r of rows) {
+    const key = groupKey(r.productName);
+    const g = groups.get(key);
+    if (g) g.rows.push(r);
+    else groups.set(key, { label: r.productName.trim().slice(0, 5), rows: [r] });
+  }
+  const keys = [...groups.keys()].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' }),
+  );
+
+  const itemRow = (r: RefillReportRow, i: number) => `
+      <tr>
+        <td class="num">${i}</td>
+        <td class="name">${esc(r.productName)}</td>
+        <td>${esc(r.branchSale)}</td>
+        <td>${esc(r.transferOut)}</td>
+        <td>${esc(r.branchToGet)}</td>
+        <td class="${r.less > 0 ? 'warn' : 'muted'}">${cell(r.less)}</td>
+        <td class="${r.over > 0 ? 'warn' : 'muted'}">${cell(r.over)}</td>
+        <td>${esc(meta.bmName || '–')}</td>
+      </tr>`;
+
+  let n = 0;
+  const body = keys
+    .map((key) => {
+      const { label, rows: groupRows } = groups.get(key)!;
+      const st = sumRows(groupRows);
+      // Single-item groups render as a plain row — no header/subtotal, since the
+      // row already is the group. Only multi-item groups get the header + subtotal.
+      const multi = groupRows.length > 1;
+      const header = multi
+        ? `
+      <tr class="cat">
+        <td></td>
+        <td class="name">${esc(label)}…</td>
+        <td colspan="6">${groupRows.length} items</td>
+      </tr>`
+        : '';
+      const items = groupRows.map((r) => itemRow(r, (n += 1))).join('');
+      const subtotal = multi
+        ? `
+      <tr class="subtotal">
+        <td></td>
+        <td class="label">សរុបក្រុម / Subtotal</td>
+        <td>${st.sale}</td>
+        <td>${st.out}</td>
+        <td>${st.get}</td>
+        <td>${st.less || '–'}</td>
+        <td>${st.over || '–'}</td>
+        <td></td>
+      </tr>`
+          : '';
+      return header + items + subtotal;
+    })
+    .join('');
+
+  const totals = sumRows(rows);
 
   return `<!DOCTYPE html>
 <html>
@@ -118,6 +177,10 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       td.name { text-align: left; }
       td.warn { color: #c0392b; font-weight: 700; }
       td.muted { color: #bbb; }
+      tr.cat td { background: #e8eaf2; font-weight: 700; text-align: left; }
+      tr.cat td.name { color: #232843; }
+      tr.subtotal td { background: #f7f8fb; font-weight: 700; color: #444; }
+      tr.subtotal td.label { text-align: right; }
       tfoot td { font-weight: 700; background: #f2f3f7; }
       tfoot td.label { text-align: right; }
     </style>

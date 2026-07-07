@@ -1,8 +1,10 @@
-import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,69 +12,163 @@ import {
   StyleSheet,
   TextInput,
   View,
-} from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+} from "react-native";
+import Ionicons from "react-native-vector-icons/Ionicons";
 
-import { OptionSheet } from '@/components/option-sheet';
-import { ScreenHeader } from '@/components/screen-header';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import {
+  fetchCategories,
+  toCategoryOptions,
+  type CategoryOption,
+} from "@/api/categories";
+import { isApiConfigured } from "@/api/config";
+import { createItem, updateItem } from "@/api/items";
+import { getWarehouses, type ApiOption } from "@/api/purchase-orders";
+import { createStockAdjustment } from "@/api/stock-adjustments";
+import { OptionSheet } from "@/components/option-sheet";
+import { ScreenHeader } from "@/components/screen-header";
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { useAuth } from "@/contexts/auth";
 import {
   addProduct,
   BRANDS,
-  CATEGORIES,
   getProduct,
   STOCK_TYPES,
   updateProduct,
+  type InventoryProduct,
   type ProductStatus,
-} from '@/data/inventory';
+} from "@/data/inventory";
+import { useTheme } from "@/hooks/use-theme";
 
-const BRAND = '#232843';
-const DARK = '#232843';
+const BRAND = "#232843";
+const DARK = "#232843";
 
-type Tab = 'general' | 'gallery';
-type Lang = 'en' | 'kh';
-type SheetKey = 'brand' | 'status' | 'stockType' | 'category';
+// The API expects a single-letter stock_type code; the form uses readable labels.
+const STOCK_TYPE_CODES: Record<string, string> = {
+  Stock: "S",
+  "Not Stock": "N",
+};
+
+type Tab = "general" | "gallery";
+type Lang = "en" | "kh";
+type SheetKey = "brand" | "status" | "stockType" | "category";
 
 export default function InventoryItemFormScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, product: productParam } = useLocalSearchParams<{
+    id: string;
+    product?: string;
+  }>();
   const router = useRouter();
   const theme = useTheme();
+  const { session } = useAuth();
 
-  const isNew = id === 'new';
-  const existing = useMemo(() => (isNew ? undefined : getProduct(id)), [id, isNew]);
+  const isNew = id === "new";
+  // The list passes the selected row as a JSON param (it comes from the API, not
+  // the local store), so prefer that; fall back to the local store for offline.
+  const existing = useMemo(() => {
+    if (isNew) return undefined;
+    if (productParam) {
+      try {
+        return JSON.parse(productParam) as InventoryProduct;
+      } catch {
+        // Fall through to the local store if the param is malformed.
+      }
+    }
+    return getProduct(id);
+  }, [id, isNew, productParam]);
 
-  const [tab, setTab] = useState<Tab>('general');
-  const [lang, setLang] = useState<Lang>('en');
+  const [tab, setTab] = useState<Tab>("general");
+  const [lang, setLang] = useState<Lang>("en");
 
-  const [code, setCode] = useState(existing?.code ?? '');
-  const [name, setName] = useState(existing?.name ?? '');
-  const [nameKhmer, setNameKhmer] = useState(existing?.nameKhmer ?? '');
-  const [description, setDescription] = useState(existing?.description ?? '');
-  const [descriptionKhmer, setDescriptionKhmer] = useState(existing?.descriptionKhmer ?? '');
-  const [brand, setBrand] = useState(existing?.brand ?? '');
-  const [status, setStatus] = useState<ProductStatus>(existing?.status ?? 'active');
-  const [stockType, setStockType] = useState(existing?.stockType ?? 'Stock');
-  const [category, setCategory] = useState(existing?.category ?? '');
-  const [cost, setCost] = useState(existing ? String(existing.cost) : '0');
-  const [price, setPrice] = useState(existing ? String(existing.price) : '0');
-  const [barcode, setBarcode] = useState(existing?.barcode ?? '');
-  const [stock, setStock] = useState(existing ? String(existing.stock) : '0');
-  const [alertStock, setAlertStock] = useState(existing ? String(existing.reorderLevel) : '0');
-  const [thumbnail, setThumbnail] = useState(existing?.thumbnail ?? '');
+  const [code, setCode] = useState(existing?.code ?? "");
+  const [name, setName] = useState(existing?.name ?? "");
+  const [nameKhmer, setNameKhmer] = useState(existing?.nameKhmer ?? "");
+  const [description, setDescription] = useState(existing?.description ?? "");
+  const [descriptionKhmer, setDescriptionKhmer] = useState(
+    existing?.descriptionKhmer ?? "",
+  );
+  const [brand, setBrand] = useState(existing?.brand ?? "");
+  const [status, setStatus] = useState<ProductStatus>(
+    existing?.status ?? "active",
+  );
+  const [stockType, setStockType] = useState(existing?.stockType ?? "Stock");
+  const [category, setCategory] = useState(existing?.category ?? "");
+  const [categoryId, setCategoryId] = useState(existing?.categoryId ?? "");
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [categorySearch, setCategorySearch] = useState("");
+  const [cost, setCost] = useState(existing ? String(existing.cost) : "0");
+  const [price, setPrice] = useState(existing ? String(existing.price) : "0");
+  const [barcode, setBarcode] = useState(existing?.barcode ?? "");
+  const [stock, setStock] = useState(existing ? String(existing.stock) : "0");
+  const [alertStock, setAlertStock] = useState(
+    existing ? String(existing.reorderLevel) : "0",
+  );
+  const [thumbnail, setThumbnail] = useState(existing?.thumbnail ?? "");
   const [gallery, setGallery] = useState<string[]>(existing?.gallery ?? []);
 
   const [sheet, setSheet] = useState<SheetKey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  // Warehouses are needed to seed initial branch stock on create (so the new
+  // item shows up in the branch-scoped inventory list). We default to the first.
+  const [warehouses, setWarehouses] = useState<ApiOption[]>([]);
+
+  // Load sub-categories from the backend, optionally filtered by the search term.
+  const loadCategories = useCallback(async (search?: string) => {
+    try {
+      const options = toCategoryOptions(await fetchCategories(search));
+      setCategoryOptions(options);
+      setCategoriesError(null);
+      return options;
+    } catch (err) {
+      setCategoriesError(
+        (err as Error).message || "Could not load categories.",
+      );
+      return [];
+    }
+  }, []);
+
+  // Initial load — and resolve an existing product's saved name back to its id.
+  useEffect(() => {
+    loadCategories().then((options) => {
+      if (existing?.category && !existing.categoryId) {
+        const match = options.find((o) => o.name === existing.category);
+        if (match) setCategoryId(match.id);
+      }
+    });
+  }, [loadCategories, existing?.category, existing?.categoryId]);
+
+  // Re-query the backend as the user types (debounced) while the picker is open.
+  useEffect(() => {
+    if (sheet !== "category") return;
+    const handle = setTimeout(() => loadCategories(categorySearch), 300);
+    return () => clearTimeout(handle);
+  }, [categorySearch, sheet, loadCategories]);
+
+  // Load warehouses once (create flow) so we can seed initial stock by default.
+  useEffect(() => {
+    if (!isNew || !isApiConfigured()) return;
+    let active = true;
+    getWarehouses()
+      .then((options) => {
+        if (active) setWarehouses(options);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isNew]);
 
   if (!isNew && !existing) {
     return (
       <ThemedView style={styles.container}>
         <ScreenHeader title="Not found" onBack={() => router.back()} />
         <View style={styles.centered}>
-          <ThemedText themeColor="textSecondary">This product no longer exists.</ThemedText>
+          <ThemedText themeColor="textSecondary">
+            This product no longer exists.
+          </ThemedText>
         </View>
       </ThemedView>
     );
@@ -80,24 +176,52 @@ export default function InventoryItemFormScreen() {
 
   const sheets: Record<
     SheetKey,
-    { title: string; options: string[]; selected: string; onSelect: (v: string) => void }
+    {
+      title: string;
+      options: string[];
+      selected: string;
+      onSelect: (v: string) => void;
+    }
   > = {
-    brand: { title: 'Select brand', options: BRANDS, selected: brand, onSelect: setBrand },
-    status: {
-      title: 'Item status',
-      options: ['Active', 'Inactive'],
-      selected: status === 'active' ? 'Active' : 'Inactive',
-      onSelect: (v) => setStatus(v === 'Active' ? 'active' : 'inactive'),
+    brand: {
+      title: "Select brand",
+      options: BRANDS,
+      selected: brand,
+      onSelect: setBrand,
     },
-    stockType: { title: 'Stock type', options: STOCK_TYPES, selected: stockType, onSelect: setStockType },
-    category: { title: 'Select category', options: CATEGORIES, selected: category, onSelect: setCategory },
+    status: {
+      title: "Item status",
+      options: ["Active", "Inactive"],
+      selected: status === "active" ? "Active" : "Inactive",
+      onSelect: (v) => setStatus(v === "Active" ? "active" : "inactive"),
+    },
+    stockType: {
+      title: "Stock type",
+      options: STOCK_TYPES,
+      selected: stockType,
+      onSelect: setStockType,
+    },
+    category: {
+      title: "Select category",
+      options: categoryOptions.map((o) => o.label),
+      selected:
+        categoryOptions.find((o) => o.id === categoryId)?.label ?? category,
+      onSelect: (label) => {
+        const picked = categoryOptions.find((o) => o.label === label);
+        setCategory(picked?.name ?? label);
+        setCategoryId(picked?.id ?? "");
+      },
+    },
   };
   const activeSheet = sheet ? sheets[sheet] : null;
 
   async function pickThumbnail() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.6,
+    });
     if (!res.canceled && res.assets[0]) setThumbnail(res.assets[0].uri);
   }
 
@@ -105,31 +229,33 @@ export default function InventoryItemFormScreen() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
     const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ["images"],
       allowsMultipleSelection: true,
       quality: 0.6,
     });
-    if (!res.canceled) setGallery((current) => [...current, ...res.assets.map((a) => a.uri)]);
+    if (!res.canceled)
+      setGallery((current) => [...current, ...res.assets.map((a) => a.uri)]);
   }
 
   function removeGalleryImage(index: number) {
     setGallery((current) => current.filter((_, i) => i !== index));
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (submitting) return;
     if (!name.trim()) {
-      setError('Product name is required.');
-      setTab('general');
+      setError("Product name is required.");
+      setTab("general");
       return;
     }
     if (!code.trim()) {
-      setError('Item code is required.');
-      setTab('general');
+      setError("Item code is required.");
+      setTab("general");
       return;
     }
-    if (!category) {
-      setError('Please select a category.');
-      setTab('general');
+    if (!categoryId) {
+      setError("Please select a category.");
+      setTab("general");
       return;
     }
 
@@ -138,6 +264,7 @@ export default function InventoryItemFormScreen() {
       name: name.trim(),
       nameKhmer: nameKhmer.trim(),
       category,
+      categoryId,
       brand,
       stockType,
       barcode: barcode.trim(),
@@ -151,19 +278,128 @@ export default function InventoryItemFormScreen() {
       thumbnail,
       gallery,
     };
-    if (isNew) {
-      addProduct(input);
-    } else {
-      updateProduct(id, input);
+
+    // Without an API URL configured, edit/create fall back to the in-memory store.
+    if (!isApiConfigured()) {
+      if (isNew) addProduct(input);
+      else updateProduct(id, input);
+      Alert.alert("Saved", isNew ? "Product created." : "Changes saved.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
+      return;
     }
-    router.back();
+
+    // Editing — PUT /items/{id} to persist the change on the backend.
+    if (!isNew) {
+      setError(null);
+      setSubmitting(true);
+      try {
+        await updateItem(id, {
+          item_code: code.trim(),
+          item_name: name.trim(),
+          item_name_kh: nameKhmer.trim() || name.trim(),
+          price: parseFloat(price) || 0,
+          cost: parseFloat(cost) || 0,
+          category_id: Number(categoryId),
+          alert_stock: parseInt(alertStock, 10) || 0,
+          stock_type: STOCK_TYPE_CODES[stockType],
+          // Send status so the update doesn't clear it (which would turn the
+          // item into a draft and drop it from the branch inventory list).
+          status: status === "active" ? 1 : 0,
+        });
+        Alert.alert("Saved", "Changes saved.", [
+          { text: "OK", onPress: () => router.back() },
+        ]);
+      } catch (e) {
+        const message =
+          e instanceof Error ? e.message : "Failed to save changes.";
+        setError(message);
+        setTab("general");
+        Alert.alert("Could not save changes", message);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // POST /api/v1/staff/items — create the product on the backend.
+    setError(null);
+    setSubmitting(true);
+    try {
+      const created = await createItem({
+        item_code: code.trim(),
+        item_name: name.trim(),
+        // item_name_kh is required by the backend — fall back to the EN name.
+        item_name_kh: nameKhmer.trim() || name.trim(),
+        price: parseFloat(price) || 0,
+        cost: parseFloat(cost) || 0,
+        category_id: Number(categoryId),
+        alert_stock: parseInt(alertStock, 10) || 0,
+        stock_type: STOCK_TYPE_CODES[stockType],
+        status: status === "active" ? 1 : 0,
+      });
+
+      // If the server accepted the request but returned no item id, the create
+      // likely didn't persist — surface that instead of a false "created".
+      if (!created.id) {
+        const msg =
+          "The server accepted the request (2xx) but returned no item id, so the product may not have been saved. Check the backend / API response.";
+        setError(msg);
+        Alert.alert("Saved, but no item id returned", msg);
+        return;
+      }
+
+      // Optionally set the entered opening stock for the active branch's default
+      // warehouse. The item already appears in the list without this (the backend
+      // creates zero-qty stock rows on create), so this only sets a starting count.
+      const initialQty = parseInt(stock, 10) || 0;
+      const warehouseId = Number(warehouses[0]?.id ?? 0);
+      const branchLoginId = Number(session?.branch.id ?? 0);
+      let note = "";
+      if (initialQty > 0 && warehouseId && branchLoginId) {
+        try {
+          await createStockAdjustment({
+            warehouse_id: warehouseId,
+            branch_login_id: branchLoginId,
+            item_id: Number(created.id),
+            adjust_qty: initialQty,
+            adjust_type: "increase",
+            description: "Initial stock on item creation",
+            stock_unique_id: null,
+          });
+        } catch (stockErr) {
+          note =
+            "\n\nThe item was created, but its opening stock could not be set automatically. Add it via Stock Adjustment.";
+        }
+      } else if (initialQty > 0) {
+        note =
+          "\n\nThe item was created, but opening stock was not set (no default warehouse/branch). Add it via Stock Adjustment.";
+      }
+
+      // Confirm success explicitly — otherwise a silent back() looks like
+      // nothing happened. router.back() returns to the list, which refreshes
+      // on focus so the new item appears.
+      Alert.alert(
+        "Product created",
+        `“${name.trim()}” was added to inventory.${note}`,
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to save item.";
+      setError(message);
+      setTab("general");
+      // Surface the failure in a dialog so it can't be missed below the fold.
+      Alert.alert("Could not create product", message);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={isNew ? 'New Product' : existing!.name}
-        subtitle={isNew ? 'Add to inventory' : 'Edit product'}
+        title={isNew ? "New Product" : existing!.name}
+        subtitle={isNew ? "Add to inventory" : "Edit product"}
         onBack={() => router.back()}
       />
 
@@ -173,17 +409,21 @@ export default function InventoryItemFormScreen() {
           onChange={setTab}
           theme={theme}
           options={[
-            { key: 'general', label: 'General Details' },
-            { key: 'gallery', label: 'Product Gallery' },
+            { key: "general", label: "General Details" },
+            { key: "gallery", label: "Product Gallery" },
           ]}
         />
       </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          {tab === 'general' ? (
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.body}
+          keyboardShouldPersistTaps="handled"
+        >
+          {tab === "general" ? (
             <>
               <Field
                 label="Item Code"
@@ -200,12 +440,12 @@ export default function InventoryItemFormScreen() {
                 onChange={setLang}
                 theme={theme}
                 options={[
-                  { key: 'en', label: 'English' },
-                  { key: 'kh', label: 'Khmer' },
+                  { key: "en", label: "English" },
+                  { key: "kh", label: "Khmer" },
                 ]}
               />
 
-              {lang === 'en' ? (
+              {lang === "en" ? (
                 <>
                   <Field
                     label="Item Name (EN)"
@@ -249,16 +489,30 @@ export default function InventoryItemFormScreen() {
                 </ThemedText>
                 <ThemedView type="backgroundElement" style={styles.thumbBox}>
                   {thumbnail ? (
-                    <Image source={{ uri: thumbnail }} style={styles.thumbImage} contentFit="cover" />
+                    <Image
+                      source={{ uri: thumbnail }}
+                      style={styles.thumbImage}
+                      contentFit="cover"
+                    />
                   ) : (
-                    <Ionicons name="image-outline" size={44} color={theme.textSecondary} />
+                    <Ionicons
+                      name="image-outline"
+                      size={44}
+                      color={theme.textSecondary}
+                    />
                   )}
                 </ThemedView>
                 <Pressable
                   onPress={pickThumbnail}
-                  style={({ pressed }) => [styles.darkButton, pressed && styles.pressed]}>
+                  style={({ pressed }) => [
+                    styles.darkButton,
+                    pressed && styles.pressed,
+                  ]}
+                >
                   <Ionicons name="camera-outline" size={18} color="#ffffff" />
-                  <ThemedText style={styles.darkButtonText}>Choose Thumbnail</ThemedText>
+                  <ThemedText style={styles.darkButtonText}>
+                    Choose Thumbnail
+                  </ThemedText>
                 </Pressable>
               </View>
 
@@ -267,31 +521,49 @@ export default function InventoryItemFormScreen() {
                 value={brand}
                 placeholder="Select brand"
                 icon="ribbon-outline"
-                onPress={() => setSheet('brand')}
+                onPress={() => setSheet("brand")}
                 theme={theme}
               />
               <SelectField
                 label="Item Status"
-                value={status === 'active' ? 'Active' : 'Inactive'}
+                value={status === "active" ? "Active" : "Inactive"}
                 icon="ellipse-outline"
-                onPress={() => setSheet('status')}
+                onPress={() => setSheet("status")}
                 theme={theme}
               />
               <SelectField
                 label="Stock Type"
                 value={stockType}
                 icon="cube-outline"
-                onPress={() => setSheet('stockType')}
+                onPress={() => setSheet("stockType")}
                 theme={theme}
               />
               <SelectField
                 label="Category"
                 value={category}
-                placeholder="Select category"
+                placeholder={
+                  categoriesError
+                    ? "Could not load categories — tap to retry"
+                    : categoryOptions.length === 0
+                      ? "Loading categories…"
+                      : "Select category"
+                }
                 icon="pricetag-outline"
-                onPress={() => setSheet('category')}
+                onPress={() => {
+                  if (categoriesError) {
+                    setCategoriesError(null);
+                    loadCategories();
+                  } else {
+                    setSheet("category");
+                  }
+                }}
                 theme={theme}
               />
+              {categoriesError && (
+                <ThemedText type="small" style={styles.error}>
+                  {categoriesError}
+                </ThemedText>
+              )}
 
               <ThemedText type="smallBold" style={styles.sectionTitle}>
                 Pricing & Stock
@@ -354,11 +626,16 @@ export default function InventoryItemFormScreen() {
               <View style={styles.galleryGrid}>
                 {gallery.map((uri, index) => (
                   <View key={`${uri}-${index}`} style={styles.galleryItem}>
-                    <Image source={{ uri }} style={styles.galleryImage} contentFit="cover" />
+                    <Image
+                      source={{ uri }}
+                      style={styles.galleryImage}
+                      contentFit="cover"
+                    />
                     <Pressable
                       onPress={() => removeGalleryImage(index)}
                       style={styles.galleryRemove}
-                      hitSlop={Spacing.one}>
+                      hitSlop={Spacing.one}
+                    >
                       <Ionicons name="close" size={14} color="#ffffff" />
                     </Pressable>
                   </View>
@@ -370,7 +647,8 @@ export default function InventoryItemFormScreen() {
                     styles.galleryAdd,
                     { borderColor: theme.backgroundSelected },
                     pressed && styles.pressed,
-                  ]}>
+                  ]}
+                >
                   <Ionicons name="add" size={28} color={theme.textSecondary} />
                 </Pressable>
               </View>
@@ -385,10 +663,19 @@ export default function InventoryItemFormScreen() {
 
           <Pressable
             onPress={handleSave}
-            style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}>
-            <Ionicons name="checkmark" size={18} color="#ffffff" />
+            disabled={submitting}
+            style={({ pressed }) => [
+              styles.saveButton,
+              (pressed || submitting) && styles.pressed,
+            ]}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Ionicons name="checkmark" size={18} color="#ffffff" />
+            )}
             <ThemedText style={styles.saveButtonText}>
-              {isNew ? 'Save Item' : 'Save changes'}
+              {submitting ? "Saving…" : isNew ? "Save Item" : "Save changes"}
             </ThemedText>
           </Pressable>
         </ScrollView>
@@ -396,15 +683,24 @@ export default function InventoryItemFormScreen() {
 
       <OptionSheet
         visible={!!sheet}
-        title={activeSheet?.title ?? ''}
+        title={activeSheet?.title ?? ""}
         options={activeSheet?.options ?? []}
         selected={activeSheet?.selected}
+        searchable={sheet === "category"}
+        searchValue={categorySearch}
+        onSearchChange={setCategorySearch}
+        searchPlaceholder="Search categories…"
+        emptyText={categoriesError ?? "No categories found."}
         onSelect={(value) => {
           activeSheet?.onSelect(value);
           setError(null);
           setSheet(null);
+          setCategorySearch("");
         }}
-        onClose={() => setSheet(null)}
+        onClose={() => {
+          setSheet(null);
+          setCategorySearch("");
+        }}
       />
     </ThemedView>
   );
@@ -422,18 +718,26 @@ function Segmented<T extends string>({
   theme: ReturnType<typeof useTheme>;
 }) {
   return (
-    <View style={[styles.segmented, { backgroundColor: theme.backgroundElement }]}>
+    <View
+      style={[styles.segmented, { backgroundColor: theme.backgroundElement }]}
+    >
       {options.map((option) => {
         const active = option.key === value;
         return (
           <Pressable
             key={option.key}
             onPress={() => onChange(option.key)}
-            style={[styles.segment, active && styles.segmentActive]}>
+            style={[styles.segment, active && styles.segmentActive]}
+          >
             <ThemedText
               type="smallBold"
               numberOfLines={1}
-              style={active ? styles.segmentActiveText : { color: theme.textSecondary }}>
+              style={
+                active
+                  ? styles.segmentActiveText
+                  : { color: theme.textSecondary }
+              }
+            >
               {option.label}
             </ThemedText>
           </Pressable>
@@ -454,7 +758,7 @@ function SelectField({
   label: string;
   value: string;
   placeholder?: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  icon: React.ComponentProps<typeof Ionicons>["name"];
   onPress: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
@@ -463,16 +767,27 @@ function SelectField({
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => pressed && styles.pressed}
+      >
         <ThemedView type="backgroundElement" style={styles.input}>
           <View style={styles.selectRow}>
             <Ionicons name={icon} size={18} color={theme.textSecondary} />
             <ThemedText
               numberOfLines={1}
-              style={[styles.selectValue, { color: value ? theme.text : theme.textSecondary }]}>
+              style={[
+                styles.selectValue,
+                { color: value ? theme.text : theme.textSecondary },
+              ]}
+            >
               {value || placeholder}
             </ThemedText>
-            <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
+            <Ionicons
+              name="chevron-down"
+              size={18}
+              color={theme.textSecondary}
+            />
           </View>
         </ThemedView>
       </Pressable>
@@ -486,13 +801,23 @@ type FieldProps = React.ComponentProps<typeof TextInput> & {
   containerStyle?: object;
 };
 
-function Field({ label, theme, containerStyle, style, multiline, ...inputProps }: FieldProps) {
+function Field({
+  label,
+  theme,
+  containerStyle,
+  style,
+  multiline,
+  ...inputProps
+}: FieldProps) {
   return (
     <View style={[styles.fieldGroup, containerStyle]}>
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedView type="backgroundElement" style={[styles.input, multiline && styles.inputMultiline]}>
+      <ThemedView
+        type="backgroundElement"
+        style={[styles.input, multiline && styles.inputMultiline]}
+      >
         <TextInput
           placeholderTextColor={theme.textSecondary}
           style={[styles.inputText, { color: theme.text }, style]}
@@ -513,15 +838,15 @@ const styles = StyleSheet.create({
   },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabBarWrap: {
     paddingHorizontal: Spacing.four,
     paddingBottom: Spacing.three,
   },
   segmented: {
-    flexDirection: 'row',
+    flexDirection: "row",
     borderRadius: Spacing.three,
     padding: Spacing.half,
     gap: Spacing.half,
@@ -530,28 +855,28 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     borderRadius: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   segmentActive: {
     backgroundColor: DARK,
   },
   segmentActiveText: {
-    color: '#ffffff',
+    color: "#ffffff",
   },
   body: {
     padding: Spacing.four,
     paddingTop: 0,
     gap: Spacing.three,
-    width: '100%',
+    width: "100%",
     maxWidth: MaxContentWidth,
-    alignSelf: 'center',
+    alignSelf: "center",
   },
   fieldGroup: {
     gap: Spacing.one,
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.three,
   },
   rowItem: {
@@ -561,7 +886,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     paddingHorizontal: Spacing.three,
     minHeight: 52,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   inputMultiline: {
     minHeight: 96,
@@ -571,8 +896,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   selectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.two,
   },
   selectValue: {
@@ -586,18 +911,18 @@ const styles = StyleSheet.create({
   thumbBox: {
     height: 180,
     borderRadius: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
   thumbImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   darkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.two,
     height: 48,
     borderRadius: Spacing.three,
@@ -605,49 +930,49 @@ const styles = StyleSheet.create({
     marginTop: Spacing.one,
   },
   darkButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   galleryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.three,
   },
   galleryItem: {
-    width: '31%',
+    width: "31%",
     aspectRatio: 1,
     borderRadius: Spacing.three,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   galleryImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   galleryRemove: {
-    position: 'absolute',
+    position: "absolute",
     top: Spacing.one,
     right: Spacing.one,
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   galleryAdd: {
     borderWidth: 1,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
   },
   error: {
-    color: '#e5484d',
+    color: "#e5484d",
   },
   saveButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.one,
     height: 52,
     borderRadius: Spacing.three,
@@ -655,9 +980,9 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: "#ffffff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   pressed: {
     opacity: 0.7,

@@ -15,9 +15,11 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { fetchBranchSales, type SoldItem } from '@/api/daily-sales';
+import { type ApiItem } from '@/api/items';
 import { getWarehouses, type ApiOption } from '@/api/purchase-orders';
 import { fetchWarehouseStockMap } from '@/api/stock-on-hand';
 import { createTransfer, type CreateTransferBody } from '@/api/transfers';
+import { ItemSearchSheet } from '@/components/item-search-sheet';
 import { OptionSheet } from '@/components/option-sheet';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
@@ -80,6 +82,10 @@ export default function BranchRefillScreen() {
   const { session } = useAuth();
 
   const [rows, setRows] = useState<SoldItem[]>([]);
+  // Catalog items the user adds on top of the sold items (e.g. brand-new stock).
+  // Kept separate so the sales fetch effect can't clobber them.
+  const [extraItems, setExtraItems] = useState<SoldItem[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [qtys, setQtys] = useState<Record<string, string>>({});
   const [bmName, setBmName] = useState('');
   const [stock, setStock] = useState<Record<string, number>>({});
@@ -116,7 +122,15 @@ export default function BranchRefillScreen() {
     setLoading(true);
     fetchBranchSales({ date: params.date, branchId: params.branchId })
       .then((result) => {
-        if (active) setRows(result.items);
+        // Sort sold items A–Z by name so both the on-screen list and the
+        // Telegram refill report (derived from `rows`) come out alphabetical.
+        if (active) {
+          setRows(
+            [...result.items].sort((a, b) =>
+              a.itemName.localeCompare(b.itemName, undefined, { sensitivity: 'base' }),
+            ),
+          );
+        }
       })
       .catch((e) => {
         if (active) setError(e instanceof Error ? e.message : 'Failed to load sales.');
@@ -148,9 +162,13 @@ export default function BranchRefillScreen() {
 
   const available = (itemId: string) => stock[itemId] ?? 0;
 
+  // Sold items first, then any items the user added manually (kept at the
+  // bottom of the on-screen list). The Telegram report sorts them A–Z instead.
+  const allRows = useMemo(() => [...rows, ...extraItems], [rows, extraItems]);
+
   const selectedCount = useMemo(
-    () => rows.filter((r) => (parseInt(qtys[r.itemId] ?? '', 10) || 0) > 0).length,
-    [rows, qtys],
+    () => allRows.filter((r) => (parseInt(qtys[r.itemId] ?? '', 10) || 0) > 0).length,
+    [allRows, qtys],
   );
 
   function setQty(itemId: string, value: string) {
@@ -158,9 +176,45 @@ export default function BranchRefillScreen() {
   }
 
   function fillFromSold() {
-    const next: Record<string, string> = {};
-    for (const r of rows) next[r.itemId] = String(r.qtySold);
-    setQtys(next);
+    // Set the sold items to their sold qty, preserving any qty typed for the
+    // manually added items.
+    setQtys((prev) => {
+      const next = { ...prev };
+      for (const r of rows) next[r.itemId] = String(r.qtySold);
+      return next;
+    });
+  }
+
+  /** Add a catalog item picked from the search sheet (ignores duplicates). */
+  function addItem(item: ApiItem) {
+    setExtraItems((prev) => {
+      if (prev.some((r) => r.itemId === item.id) || rows.some((r) => r.itemId === item.id)) {
+        return prev;
+      }
+      return [
+        ...prev,
+        {
+          itemId: item.id,
+          itemCode: item.code,
+          itemName: item.name,
+          image: item.image ?? '',
+          qtySold: 0,
+          revenue: 0,
+          cost: item.cost,
+          profit: 0,
+          invoiceCount: 0,
+        },
+      ];
+    });
+  }
+
+  function removeItem(itemId: string) {
+    setExtraItems((prev) => prev.filter((r) => r.itemId !== itemId));
+    setQtys((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
   }
 
   async function handleTransfer() {
@@ -173,7 +227,7 @@ export default function BranchRefillScreen() {
       setError('Source and destination warehouses are the same.');
       return;
     }
-    const items = rows
+    const items = allRows
       .map((r) => ({ row: r, qty: parseInt(qtys[r.itemId] ?? '', 10) || 0 }))
       .filter((x) => x.qty > 0);
     if (items.length === 0) {
@@ -214,7 +268,7 @@ export default function BranchRefillScreen() {
       // The report lists every sold item with the exact transfer-out entered
       // (0 included), so shortages show up in the Less column — unlike the
       // transfer body above, which can only carry qty > 0 rows.
-      const reportItems = rows.map((r) => ({
+      const reportItems = allRows.map((r) => ({
         row: r,
         qty: parseInt(qtys[r.itemId] ?? '', 10) || 0,
       }));
@@ -241,9 +295,13 @@ export default function BranchRefillScreen() {
       return;
     }
     try {
-      const reportRows = items.map(({ row, qty }) =>
-        toReportRow(row.itemName, row.qtySold, qty),
-      );
+      // Sort the report A–Z by item name (sold + manually added interleaved),
+      // even though the on-screen list keeps added items at the bottom.
+      const reportRows = [...items]
+        .sort((a, b) =>
+          a.row.itemName.localeCompare(b.row.itemName, undefined, { sensitivity: 'base' }),
+        )
+        .map(({ row, qty }) => toReportRow(row.itemName, row.qtySold, qty));
       const uri = await generateRefillReportPdf(reportRows, {
         branchName: params.branchName || `Branch ${params.branchId}`,
         sourceName: params.sourceName,
@@ -267,6 +325,24 @@ export default function BranchRefillScreen() {
       );
     }
   }
+
+  // One item row, reused by the phone (stacked) and tablet (grid) layouts.
+  const renderRow = (row: SoldItem, divider: boolean) => (
+    <ItemRow
+      key={row.itemId}
+      row={row}
+      value={qtys[row.itemId] ?? ''}
+      available={available(row.itemId)}
+      stockLoading={stockLoading}
+      onChange={(v) => setQty(row.itemId, v)}
+      onRemove={
+        extraItems.some((r) => r.itemId === row.itemId) ? () => removeItem(row.itemId) : undefined
+      }
+      divider={divider}
+      theme={theme}
+      isTablet={isTablet}
+    />
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -335,7 +411,7 @@ export default function BranchRefillScreen() {
             <ThemedText
               type="smallBold"
               style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}>
-              Sold items
+              Items to transfer
             </ThemedText>
             {rows.length > 0 && (
               <Pressable onPress={fillFromSold} hitSlop={Spacing.two}>
@@ -348,26 +424,31 @@ export default function BranchRefillScreen() {
 
           {loading ? (
             <SkeletonList />
-          ) : rows.length === 0 ? (
+          ) : allRows.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No items were sold by this branch on this day.'}
+              {error ?? 'No items were sold by this branch on this day. Tap “Add item” to transfer stock manually.'}
             </ThemedText>
           ) : (
+            // One item per row (single column on phone and tablet) so the full
+            // product name has the whole width to show.
             <ThemedView type="backgroundElement" style={styles.itemsCard}>
-              {rows.map((row, index) => (
-                <ItemRow
-                  key={row.itemId}
-                  row={row}
-                  value={qtys[row.itemId] ?? ''}
-                  available={available(row.itemId)}
-                  stockLoading={stockLoading}
-                  onChange={(v) => setQty(row.itemId, v)}
-                  divider={index > 0}
-                  theme={theme}
-                  isTablet={isTablet}
-                />
-              ))}
+              {allRows.map((row, index) => renderRow(row, index > 0))}
             </ThemedView>
+          )}
+
+          {!loading && (
+            <Pressable
+              onPress={() => setPickerOpen(true)}
+              style={({ pressed }) => [
+                styles.addItemButton,
+                { borderColor: theme.backgroundElement },
+                pressed && styles.pressed,
+              ]}>
+              <Ionicons name="add-circle" size={20} color={BRAND} />
+              <ThemedText type="smallBold" style={{ color: BRAND }}>
+                Add item
+              </ThemedText>
+            </Pressable>
           )}
 
           {error && rows.length > 0 ? (
@@ -409,6 +490,13 @@ export default function BranchRefillScreen() {
         }}
         onClose={() => setDestSheet(false)}
       />
+
+      <ItemSearchSheet
+        visible={pickerOpen}
+        selectedCodes={allRows.map((r) => r.itemCode)}
+        onAdd={addItem}
+        onClose={() => setPickerOpen(false)}
+      />
     </ThemedView>
   );
 }
@@ -419,6 +507,7 @@ function ItemRow({
   available,
   stockLoading,
   onChange,
+  onRemove,
   divider,
   theme,
   isTablet,
@@ -428,6 +517,7 @@ function ItemRow({
   available: number;
   stockLoading: boolean;
   onChange: (v: string) => void;
+  onRemove?: () => void;
   divider: boolean;
   theme: ReturnType<typeof useTheme>;
   isTablet: boolean;
@@ -451,10 +541,7 @@ function ItemRow({
         )}
       </ThemedView>
       <View style={styles.itemInfo}>
-        <ThemedText
-          type="smallBold"
-          numberOfLines={1}
-          style={isTablet ? styles.itemNameTablet : undefined}>
+        <ThemedText type="smallBold" style={isTablet ? styles.itemNameTablet : undefined}>
           {row.itemName}
         </ThemedText>
         <ThemedText
@@ -500,6 +587,11 @@ function ItemRow({
           style={[styles.qtyInput, isTablet && styles.qtyInputTablet, { color: over ? '#e5484d' : theme.text }]}
         />
       </ThemedView>
+      {onRemove ? (
+        <Pressable onPress={onRemove} hitSlop={Spacing.two} style={styles.removeBtn}>
+          <Ionicons name="close-circle" size={isTablet ? 24 : 20} color={theme.textSecondary} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -557,6 +649,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  addItemButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    height: 48,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
+  removeBtn: {
+    paddingLeft: Spacing.one,
   },
   sectionTitle: {
     fontSize: 16,

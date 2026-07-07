@@ -130,6 +130,20 @@ export default function SettingsScreen() {
             label="Stock Report"
             onPress={() => router.push('/stock-report')}
             theme={theme}
+          />
+          <SettingRow
+            icon="stats-chart-outline"
+            color="#8E4EC6"
+            label="Sale Summary Report"
+            onPress={() => router.push('/sale-summary-report')}
+            theme={theme}
+          />
+          <SettingRow
+            icon="swap-horizontal-outline"
+            color="#F5A623"
+            label="Transfer In Report"
+            onPress={() => router.push('/transfer-in-report')}
+            theme={theme}
             last
           />
         </Section>

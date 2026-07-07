@@ -8,12 +8,14 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+import { fetchCategories, type Category } from '@/api/categories';
 import {
   completeStockCount,
   fetchStockCount,
@@ -36,6 +38,9 @@ import { useTheme } from '@/hooks/use-theme';
 const BRAND = '#232843';
 const OVER = '#30A46C';
 const SHORT = '#e5484d';
+
+// Pagination/infinite-scroll is disabled — request all items in a single page.
+const ALL_ITEMS_PER_PAGE = 1000;
 
 const OVERAGE_REASONS = [
   'Found extra stock',
@@ -65,12 +70,11 @@ export default function StockCountDetailScreen() {
 
   const [header, setHeader] = useState<StockCountDetail | null>(null);
   const [items, setItems] = useState<StockCountItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [lastPage, setLastPage] = useState(1);
   const [search, setSearch] = useState('');
   const [onlyDiscrepancy, setOnlyDiscrepancy] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryId, setCategoryId] = useState('');
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
@@ -89,34 +93,27 @@ export default function StockCountDetailScreen() {
   }, [id]);
 
   const load = useCallback(
-    async (q: string, only: boolean, nextPage: number, append: boolean) => {
+    async (q: string, only: boolean, cat: string) => {
       const reqId = ++requestId.current;
-      if (append) setLoadingMore(true);
-      else {
-        setLoading(true);
-        setError(null);
-      }
+      setLoading(true);
+      setError(null);
       try {
         const result = await fetchStockCountItems({
           id,
-          page: nextPage,
           search: q,
           onlyDiscrepancy: only,
+          categoryId: cat,
+          perPage: ALL_ITEMS_PER_PAGE,
         });
         if (reqId !== requestId.current) return;
-        setItems((prev) => (append ? [...prev, ...result.items] : result.items));
-        setPage(result.page);
-        setLastPage(result.lastPage);
+        setItems(result.items);
       } catch (e) {
-        if (reqId === requestId.current && !append) {
+        if (reqId === requestId.current) {
           setError(e instanceof Error ? e.message : 'Failed to load items.');
           setItems([]);
         }
       } finally {
-        if (reqId === requestId.current) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
+        if (reqId === requestId.current) setLoading(false);
       }
     },
     [id],
@@ -127,20 +124,21 @@ export default function StockCountDetailScreen() {
   }, [loadHeader]);
 
   useEffect(() => {
-    const t = setTimeout(() => load(search, onlyDiscrepancy, 1, false), search ? 350 : 0);
-    return () => clearTimeout(t);
-  }, [search, onlyDiscrepancy, load]);
+    fetchCategories()
+      .then(setCategories)
+      .catch(() => {});
+  }, []);
 
-  function loadMore() {
-    if (loading || loadingMore || page >= lastPage) return;
-    load(search, onlyDiscrepancy, page + 1, true);
-  }
+  useEffect(() => {
+    const t = setTimeout(() => load(search, onlyDiscrepancy, categoryId), search ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [search, onlyDiscrepancy, categoryId, load]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadHeader();
-    load(search, onlyDiscrepancy, 1, false).finally(() => setRefreshing(false));
-  }, [loadHeader, load, search, onlyDiscrepancy]);
+    load(search, onlyDiscrepancy, categoryId).finally(() => setRefreshing(false));
+  }, [loadHeader, load, search, onlyDiscrepancy, categoryId]);
 
   // Display helpers that prefer local edits, falling back to persisted values.
   const countedOf = (it: StockCountItem) =>
@@ -192,7 +190,7 @@ export default function StockCountDetailScreen() {
       await submitStockCountItems(id, payload);
       setEdits({});
       loadHeader();
-      await load(search, onlyDiscrepancy, 1, false);
+      await load(search, onlyDiscrepancy, categoryId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save counts.');
     } finally {
@@ -250,8 +248,6 @@ export default function StockCountDetailScreen() {
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          onEndReachedThreshold={0.4}
-          onEndReached={loadMore}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -297,6 +293,40 @@ export default function StockCountDetailScreen() {
                   </ThemedText>
                 </Pressable>
               </View>
+
+              {categories.length > 0 && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={styles.tabs}>
+                  {[{ id: '', name: 'All' }, ...categories].map((cat) => {
+                    const active = categoryId === cat.id;
+                    return (
+                      <Pressable
+                        key={cat.id || 'all'}
+                        onPress={() => setCategoryId(cat.id)}
+                        style={({ pressed }) => [
+                          styles.tab,
+                          {
+                            backgroundColor: active ? BRAND : theme.backgroundElement,
+                          },
+                          pressed && styles.pressed,
+                        ]}>
+                        <ThemedText
+                          type="small"
+                          numberOfLines={1}
+                          style={[
+                            styles.tabText,
+                            active ? styles.tabActive : { color: theme.textSecondary },
+                          ]}>
+                          {cat.name}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              )}
             </View>
           }
           renderItem={({ item }) => (
@@ -318,13 +348,6 @@ export default function StockCountDetailScreen() {
                 {error ?? 'No items.'}
               </ThemedText>
             )
-          }
-          ListFooterComponent={
-            loadingMore ? (
-              <View style={styles.footer}>
-                <ActivityIndicator color={theme.textSecondary} />
-              </View>
-            ) : null
           }
         />
 
@@ -558,6 +581,30 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
   },
   toggleActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  tabs: {
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  tab: {
+    paddingHorizontal: Spacing.three,
+    height: 38,
+    borderRadius: Spacing.five,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Fixed fontSize/lineHeight (tall enough for Khmer) so every tab is the same
+  // height regardless of script. includeFontPadding:false trims Android's extra
+  // vertical padding that otherwise makes Khmer rows taller.
+  tabText: {
+    fontSize: 13,
+    lineHeight: 22,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  tabActive: {
     color: '#ffffff',
     fontWeight: '700',
   },

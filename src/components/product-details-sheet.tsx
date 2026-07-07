@@ -15,7 +15,7 @@ const DANGER = '#e5484d';
 type Props = {
   product: InventoryProduct | null;
   onClose: () => void;
-  onEdit: (id: string) => void;
+  onEdit: (product: InventoryProduct) => void;
   onDelete: (id: string) => void;
 };
 
@@ -55,38 +55,56 @@ export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Prop
                   <ThemedText type="subtitle" style={styles.title} numberOfLines={2}>
                     {product.name}
                   </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
+                  <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
                     {product.code}
                   </ThemedText>
                 </View>
               </View>
 
-              <View style={styles.badges}>
-                <View style={[styles.badge, { backgroundColor: `${levelMeta.color}22` }]}>
+              <View style={styles.chips}>
+                <View style={[styles.chip, { backgroundColor: `${levelMeta.color}1A` }]}>
                   <View style={[styles.dot, { backgroundColor: levelMeta.color }]} />
                   <ThemedText type="small" style={{ color: levelMeta.color, fontWeight: '700' }}>
                     {levelMeta.label}
                   </ThemedText>
                 </View>
-                <View style={[styles.badge, { backgroundColor: theme.backgroundElement }]}>
+                {!!product.category && (
+                  <View style={[styles.chip, { backgroundColor: theme.backgroundElement }]}>
+                    <Ionicons name="pricetag-outline" size={12} color={theme.textSecondary} />
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {product.category}
+                    </ThemedText>
+                  </View>
+                )}
+                <View style={[styles.chip, { backgroundColor: theme.backgroundElement }]}>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {product.category}
+                    {product.status === 'active' ? 'Active' : 'Inactive'}
                   </ThemedText>
                 </View>
               </View>
 
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-                <ThemedView type="backgroundElement" style={styles.card}>
-                  <DetailRow label="Brand" value={product.brand || '—'} theme={theme} />
-                  <DetailRow label="Cost" value={formatMoney(product.cost)} theme={theme} />
-                  <DetailRow label="Selling Price" value={formatMoney(product.price)} theme={theme} />
-                  <DetailRow label="Stock on hand" value={`${product.stock}`} theme={theme} />
-                  <DetailRow label="Reorder level" value={`${product.reorderLevel}`} theme={theme} />
-                  <DetailRow
-                    label="Status"
-                    value={product.status === 'active' ? 'Active' : 'Inactive'}
+              <ScrollView
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.scrollBody}>
+                <View style={styles.stats}>
+                  <StatTile
+                    label="On hand"
+                    value={`${product.stock}`}
+                    hint={`Reorder at ${product.reorderLevel}`}
+                    accent={levelMeta.color}
                     theme={theme}
                   />
+                  <StatTile label="Sell price" value={formatMoney(product.price)} theme={theme} />
+                  <StatTile label="Cost" value={formatMoney(product.cost)} theme={theme} />
+                </View>
+
+                <ThemedView type="backgroundElement" style={styles.card}>
+                  <DetailRow label="Brand" value={product.brand || '—'} theme={theme} />
+                  <DetailRow label="Stock type" value={product.stockType || '—'} theme={theme} />
+                  {!!product.barcode && (
+                    <DetailRow label="Barcode" value={product.barcode} theme={theme} />
+                  )}
                   <DetailRow
                     label="Description"
                     value={product.description || '—'}
@@ -104,7 +122,7 @@ export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Prop
                   <ThemedText style={[styles.deleteText, { color: DANGER }]}>Delete</ThemedText>
                 </Pressable>
                 <Pressable
-                  onPress={() => onEdit(product.id)}
+                  onPress={() => onEdit(product)}
                   style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
                   <Ionicons name="create-outline" size={18} color="#ffffff" />
                   <ThemedText style={styles.editText}>Edit</ThemedText>
@@ -145,6 +163,43 @@ function DetailRow({
   );
 }
 
+function StatTile({
+  label,
+  value,
+  hint,
+  accent,
+  theme,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: string;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  return (
+    <ThemedView type="backgroundElement" style={styles.statTile}>
+      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        {label}
+      </ThemedText>
+      <ThemedText
+        type="smallBold"
+        numberOfLines={1}
+        style={[styles.statValue, accent ? { color: accent } : null]}>
+        {value}
+      </ThemedText>
+      {hint ? (
+        <ThemedText
+          type="small"
+          themeColor="textSecondary"
+          numberOfLines={1}
+          style={styles.statHint}>
+          {hint}
+        </ThemedText>
+      ) : null}
+    </ThemedView>
+  );
+}
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
@@ -167,7 +222,7 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.three,
   },
   thumb: {
@@ -185,27 +240,51 @@ const styles = StyleSheet.create({
   titleText: {
     flex: 1,
     gap: Spacing.half,
+    paddingTop: Spacing.half,
   },
   title: {
     fontSize: 20,
-    lineHeight: 26,
+    // Khmer glyphs stack vowels/subscripts, so give them room or they clip.
+    lineHeight: 30,
   },
-  badges: {
+  chips: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  badge: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
-    borderRadius: Spacing.three,
+    borderRadius: Spacing.two,
   },
   dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  scrollBody: {
+    gap: Spacing.three,
+    paddingBottom: Spacing.one,
+  },
+  stats: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  statTile: {
+    flex: 1,
+    borderRadius: Spacing.three,
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.two,
+    gap: Spacing.half,
+  },
+  statValue: {
+    fontSize: 17,
+  },
+  statHint: {
+    fontSize: 11,
   },
   card: {
     borderRadius: Spacing.three,

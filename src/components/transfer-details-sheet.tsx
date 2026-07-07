@@ -211,13 +211,29 @@ async function buildTransferReport(
     try {
       const sales = await fetchBranchSales({ date: salesDate, branchId: branch.id });
       if (sales.items.length > 0) {
-        rows = sales.items.map((s) =>
+        const soldRows = sales.items.map((s) =>
           toReportRow(
             s.itemName,
             s.qtySold,
             transferredQty.get(s.itemId) ?? transferredQty.get(s.itemCode) ?? 0,
           ),
         );
+        // Sold items don't cover manually-added stock (new items that weren't
+        // sold that day). Append any transferred item not in the sales list so
+        // the report matches the transfer, not just the day's sales.
+        const soldKeys = new Set<string>();
+        for (const s of sales.items) {
+          if (s.itemId) soldKeys.add(s.itemId);
+          if (s.itemCode) soldKeys.add(s.itemCode);
+        }
+        const extraRows = transfer.items
+          .filter(
+            (it) =>
+              !(it.itemId && soldKeys.has(it.itemId)) &&
+              !(it.itemCode && soldKeys.has(it.itemCode)),
+          )
+          .map((it) => toReportRow(it.itemName, 0, it.qty));
+        rows = [...soldRows, ...extraRows];
       }
     } catch {
       // Fall back to the transferred items below.

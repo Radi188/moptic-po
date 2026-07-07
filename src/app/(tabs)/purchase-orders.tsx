@@ -4,6 +4,7 @@ import DateTimePicker, {
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -35,7 +36,6 @@ import {
   formatMoney,
   STATUS_META,
   type PurchaseOrder,
-  type PurchaseOrderPage,
 } from "@/data/purchase-orders";
 import { SkeletonList } from "@/components/skeleton";
 import { useResponsive } from "@/hooks/use-responsive";
@@ -68,14 +68,12 @@ export default function PurchaseOrdersScreen() {
   const [datePicker, setDatePicker] = useState<"from" | "to" | null>(null);
   const [tempDate, setTempDate] = useState(() => new Date());
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const [data, setData] = useState<PurchaseOrderPage>({
-    items: [],
-    total: 0,
-    totalPages: 1,
-    page: 1,
-  });
+  const [items, setItems] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,36 +88,54 @@ export default function PurchaseOrdersScreen() {
       .catch(() => {});
   }, []);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    return fetchPurchaseOrders({
-      page,
-      search,
-      warehouse,
-      dateFrom: ymd(dateFrom),
-      dateTo: ymd(dateTo),
-    })
-      .then(setData)
-      .catch((e) =>
-        setError(e instanceof Error ? e.message : "Failed to load orders."),
-      )
-      .finally(() => setLoading(false));
-  }, [page, search, warehouse, dateFrom, dateTo]);
+  const load = useCallback(
+    (targetPage: number, mode: "replace" | "append") => {
+      if (mode === "append") setLoadingMore(true);
+      else setLoading(true);
+      setError(null);
+      return fetchPurchaseOrders({
+        page: targetPage,
+        search,
+        warehouse,
+        dateFrom: ymd(dateFrom),
+        dateTo: ymd(dateTo),
+      })
+        .then((res) => {
+          setItems((prev) =>
+            mode === "append" ? [...prev, ...res.items] : res.items,
+          );
+          setTotal(res.total);
+          setTotalPages(res.totalPages);
+          setPage(res.page);
+        })
+        .catch((e) =>
+          setError(e instanceof Error ? e.message : "Failed to load orders."),
+        )
+        .finally(() => {
+          setLoading(false);
+          setLoadingMore(false);
+        });
+    },
+    [search, warehouse, dateFrom, dateTo],
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reload from the first page on mount, refocus, or when filters change.
   useFocusEffect(
     useCallback(() => {
-      load();
+      load(1, "replace");
     }, [load]),
   );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    load().finally(() => setRefreshing(false));
+    load(1, "replace").finally(() => setRefreshing(false));
   }, [load]);
+
+  const loadMore = useCallback(() => {
+    if (loading || loadingMore || refreshing) return;
+    if (page >= totalPages) return;
+    load(page + 1, "append");
+  }, [loading, loadingMore, refreshing, page, totalPages, load]);
 
   function changeSearch(text: string) {
     setSearch(text);
@@ -179,7 +195,7 @@ export default function PurchaseOrdersScreen() {
         <View>
           <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Purchase Orders</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {data.total} orders
+            {total} orders
           </ThemedText>
         </View>
         <Pressable
@@ -315,13 +331,15 @@ export default function PurchaseOrdersScreen() {
       )}
 
       <FlatList
-        data={data.items}
+        data={items}
         keyExtractor={(item) => item.id}
         key={isTablet ? "grid" : "list"}
         numColumns={isTablet ? 2 : 1}
         columnWrapperStyle={isTablet ? styles.columnWrapper : undefined}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -355,13 +373,10 @@ export default function PurchaseOrdersScreen() {
           )
         }
         ListFooterComponent={
-          data.items.length > 0 ? (
-            <Pager
-              page={data.page}
-              totalPages={data.totalPages}
-              onChange={setPage}
-              theme={theme}
-            />
+          loadingMore ? (
+            <View style={styles.footer}>
+              <ActivityIndicator color={theme.tint} />
+            </View>
           ) : null
         }
       />
@@ -391,7 +406,7 @@ export default function PurchaseOrdersScreen() {
         onClose={() => setWarehouseSheet(false)}
       />
 
-      <ListLoadingOverlay visible={loading && data.items.length > 0} />
+      <ListLoadingOverlay visible={loading && items.length > 0} />
     </ThemedView>
   );
 }
@@ -478,67 +493,6 @@ function OrderCard({
           </View>
         </View>
       </ThemedView>
-    </Pressable>
-  );
-}
-
-function Pager({
-  page,
-  totalPages,
-  onChange,
-  theme,
-}: {
-  page: number;
-  totalPages: number;
-  onChange: (p: number) => void;
-  theme: ReturnType<typeof useTheme>;
-}) {
-  if (totalPages <= 1) return null;
-
-  return (
-    <View style={styles.pager}>
-      <PagerButton
-        disabled={page === 1}
-        onPress={() => onChange(page - 1)}
-        theme={theme}
-        icon="chevron-back"
-      />
-      <ThemedText type="smallBold" style={styles.pagerLabel}>
-        Page {page} of {totalPages}
-      </ThemedText>
-      <PagerButton
-        disabled={page === totalPages}
-        onPress={() => onChange(page + 1)}
-        theme={theme}
-        icon="chevron-forward"
-      />
-    </View>
-  );
-}
-
-function PagerButton({
-  disabled,
-  onPress,
-  theme,
-  icon,
-}: {
-  disabled: boolean;
-  onPress: () => void;
-  theme: ReturnType<typeof useTheme>;
-  icon: "chevron-back" | "chevron-forward";
-}) {
-  return (
-    <Pressable
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.pagerItem,
-        { borderColor: theme.backgroundElement },
-        disabled && styles.pagerDisabled,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons name={icon} size={16} color={theme.text} />
     </Pressable>
   );
 }
@@ -691,27 +645,9 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: Spacing.three,
   },
-  pager: {
-    flexDirection: "row",
-    justifyContent: "center",
+  footer: {
+    paddingVertical: Spacing.four,
     alignItems: "center",
-    gap: Spacing.two,
-    paddingTop: Spacing.four,
-  },
-  pagerItem: {
-    minWidth: 36,
-    height: 36,
-    paddingHorizontal: Spacing.one,
-    borderRadius: Spacing.two,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pagerLabel: {
-    marginHorizontal: Spacing.two,
-  },
-  pagerDisabled: {
-    opacity: 0.4,
   },
   pressed: {
     opacity: 0.7,

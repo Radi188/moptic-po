@@ -1,5 +1,5 @@
-import { api } from '@/api/client';
-import { isApiConfigured } from '@/api/config';
+import { api } from "@/api/client";
+import { isApiConfigured } from "@/api/config";
 import {
   getTransfer as getLocalTransfer,
   listTransfers as listLocalTransfers,
@@ -8,7 +8,7 @@ import {
   type TransferItem,
   type TransferPage,
   type TransferStatus,
-} from '@/data/transfers';
+} from "@/data/transfers";
 
 type ApiUser = { id?: number | string; name?: string };
 type ApiWarehouseRef = { warehouse_name?: string };
@@ -29,7 +29,12 @@ type ApiListItem = {
 };
 
 type ApiListResponse =
-  | { current_page?: number; last_page?: number; total?: number; data?: ApiListItem[] }
+  | {
+      current_page?: number;
+      last_page?: number;
+      total?: number;
+      data?: ApiListItem[];
+    }
   | ApiListItem[];
 
 type ApiDetailItem = {
@@ -62,27 +67,30 @@ const num = (v: string | number | undefined) => Number(v ?? 0) || 0;
 // treat a bare date as midnight.
 const toIso = (s: string) => {
   if (!s) return s;
-  if (s.includes('T')) return s;
-  if (s.includes(' ')) return s.replace(' ', 'T');
+  if (s.includes("T")) return s;
+  if (s.includes(" ")) return s.replace(" ", "T");
   return `${s}T00:00:00`;
 };
 
 function mapStatus(s: string | undefined): TransferStatus {
-  const v = String(s ?? '').toLowerCase();
-  if (v.includes('approve') || v.includes('confirm') || v.includes('accept')) return 'approved';
-  if (v.includes('reject') || v.includes('decline')) return 'declined';
-  return 'pending';
+  const v = String(s ?? "").toLowerCase();
+  if (v.includes("approve") || v.includes("confirm") || v.includes("accept"))
+    return "approved";
+  if (v.includes("reject") || v.includes("decline")) return "declined";
+  return "pending";
 }
 
 function mapListItem(row: ApiListItem): StockTransfer {
   return {
     id: String(row.id),
     reference: row.transfer_reference,
-    fromWarehouse: row.warehouse_from?.warehouse_name ?? String(row.from_warehouse ?? ''),
-    toWarehouse: row.warehouse_to?.warehouse_name ?? String(row.to_warehouse ?? ''),
+    fromWarehouse:
+      row.warehouse_from?.warehouse_name ?? String(row.from_warehouse ?? ""),
+    toWarehouse:
+      row.warehouse_to?.warehouse_name ?? String(row.to_warehouse ?? ""),
     transactionDate: toIso(row.transaction_date),
-    description: row.note ?? row.description ?? '',
-    userRequest: row.request_user?.name ?? '',
+    description: row.note ?? row.description ?? "",
+    userRequest: row.request_user?.name ?? "",
     status: mapStatus(row.status),
     items: [],
     itemsCount: row.stock_transfer_details_count ?? 0,
@@ -92,14 +100,14 @@ function mapListItem(row: ApiListItem): StockTransfer {
 function mapDetailItem(it: ApiDetailItem): TransferItem {
   return {
     id: String(it.id),
-    itemId: String(it.item_id ?? ''),
-    itemCode: it.item_code ?? '',
-    itemName: it.item_name ?? it.item_code ?? '',
+    itemId: String(it.item_id ?? ""),
+    itemCode: it.item_code ?? "",
+    itemName: it.item_name ?? it.item_code ?? "",
     cost: num(it.purchase_cost ?? it.cost ?? it.item_price),
     qty: num(it.transfer_qty ?? it.qty ?? it.quantity),
-    category: it.category ?? '',
-    image: it.image ?? '',
-    uniqueId: it.unique_id ?? '',
+    category: it.category ?? "",
+    image: it.image ?? "",
+    uniqueId: it.unique_id ?? "",
   };
 }
 
@@ -107,7 +115,7 @@ function mapDetail(d: ApiDetail): StockTransfer {
   const rawItems = d.stock_transfer_details ?? d.details ?? d.items ?? [];
   return {
     ...mapListItem(d),
-    description: d.note ?? d.description ?? '',
+    description: d.note ?? d.description ?? "",
     items: rawItems.map(mapDetailItem),
   };
 }
@@ -115,28 +123,36 @@ function mapDetail(d: ApiDetail): StockTransfer {
 export type TransferListQuery = {
   page: number;
   search?: string;
-  status?: TransferStatus | 'all';
+  status?: TransferStatus | "all";
   dateFrom?: string; // YYYY-MM-DD
   dateTo?: string; // YYYY-MM-DD
 };
 
 /** GET /stock-transfers (paginated). Falls back to the local store with no API. */
-export async function fetchTransfers(query: TransferListQuery): Promise<TransferPage> {
+export async function fetchTransfers(
+  query: TransferListQuery,
+): Promise<TransferPage> {
   if (!isApiConfigured()) {
-    return listLocalTransfers({ page: query.page, search: query.search, status: query.status });
+    return listLocalTransfers({
+      page: query.page,
+      search: query.search,
+      status: query.status,
+    });
   }
 
   // The API status values: declined = "reject", pending = "request" (a user
   // requested the transfer), approved = "approve".
   const statusMap: Record<TransferStatus, string> = {
-    pending: 'request',
-    approved: 'approve',
-    declined: 'reject',
+    pending: "request",
+    approved: "approve",
+    declined: "reject",
   };
   const statusParam =
-    query.status && query.status !== 'all' ? statusMap[query.status] : undefined;
+    query.status && query.status !== "all"
+      ? statusMap[query.status]
+      : undefined;
 
-  const { data } = await api.get<ApiListResponse>('/stock-transfers', {
+  const { data } = await api.get<ApiListResponse>("/stock-transfers", {
     params: {
       page: query.page,
       search: query.search || undefined,
@@ -149,9 +165,6 @@ export async function fetchTransfers(query: TransferListQuery): Promise<Transfer
   const list = Array.isArray(data) ? data : (data.data ?? []);
 
   // TEMP: log the distinct status values so we can confirm the exact strings.
-  if (__DEV__) {
-    console.log('[transfers] statuses on page:', [...new Set(list.map((r) => r.status))]);
-  }
 
   return {
     items: list.map(mapListItem),
@@ -162,7 +175,9 @@ export async function fetchTransfers(query: TransferListQuery): Promise<Transfer
 }
 
 /** GET /stock-transfers/{id}. Falls back to the local store with no API. */
-export async function fetchTransfer(id: string): Promise<StockTransfer | undefined> {
+export async function fetchTransfer(
+  id: string,
+): Promise<StockTransfer | undefined> {
   if (!isApiConfigured()) return getLocalTransfer(id);
   const { data } = await api.get<ApiDetail>(`/stock-transfers/${id}`);
   return mapDetail(data);
@@ -187,15 +202,17 @@ export type CreateTransferBody = {
 };
 
 /** POST /stock-transfers. */
-export async function createTransfer(body: CreateTransferBody): Promise<unknown> {
-  const { data } = await api.post('/stock-transfers', body);
+export async function createTransfer(
+  body: CreateTransferBody,
+): Promise<unknown> {
+  const { data } = await api.post("/stock-transfers", body);
   return data;
 }
 
 /** POST /stock-transfers/{id}/approve */
 export async function approveTransfer(id: string): Promise<void> {
   if (!isApiConfigured()) {
-    setLocalTransferStatus(id, 'approved');
+    setLocalTransferStatus(id, "approved");
     return;
   }
   await api.post(`/stock-transfers/${id}/approve`);
@@ -204,7 +221,7 @@ export async function approveTransfer(id: string): Promise<void> {
 /** POST /stock-transfers/{id}/reject */
 export async function declineTransfer(id: string): Promise<void> {
   if (!isApiConfigured()) {
-    setLocalTransferStatus(id, 'declined');
+    setLocalTransferStatus(id, "declined");
     return;
   }
   await api.post(`/stock-transfers/${id}/reject`);

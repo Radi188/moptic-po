@@ -11,6 +11,8 @@ export type InventoryProduct = {
   name: string;
   nameKhmer: string;
   category: string;
+  /** Backend category id selected from /api/v1/categories (for posting). */
+  categoryId?: string;
   brand: string;
   stockType: string;
   barcode: string;
@@ -41,7 +43,7 @@ export const BRANDS = [
   "Local Brand",
 ];
 
-export const STOCK_TYPES = ["Stock", "Service"];
+export const STOCK_TYPES = ["Stock", "Not Stock"];
 
 export type StockLevel = "in" | "low" | "out";
 
@@ -307,6 +309,8 @@ export type ProductInput = {
   name: string;
   nameKhmer: string;
   category: string;
+  /** Backend category id selected from /api/v1/categories (for posting). */
+  categoryId?: string;
   brand: string;
   stockType: string;
   barcode: string;

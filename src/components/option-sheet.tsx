@@ -1,4 +1,4 @@
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -15,9 +15,28 @@ type Props = {
   selected?: string;
   onSelect: (value: string) => void;
   onClose: () => void;
+  /** Show a search box that drives the option list (typically server-side). */
+  searchable?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
+  /** Message shown when there are no options (e.g. no search results). */
+  emptyText?: string;
 };
 
-export function OptionSheet({ visible, title, options, selected, onSelect, onClose }: Props) {
+export function OptionSheet({
+  visible,
+  title,
+  options,
+  selected,
+  onSelect,
+  onClose,
+  searchable,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder = 'Search…',
+  emptyText = 'No results.',
+}: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -30,12 +49,37 @@ export function OptionSheet({ visible, title, options, selected, onSelect, onClo
           <ThemedText type="subtitle" style={styles.title}>
             {title}
           </ThemedText>
-          <ScrollView bounces={false}>
-            {options.map((option) => {
+          {searchable && (
+            <ThemedView type="backgroundElement" style={styles.searchBox}>
+              <Ionicons name="search" size={18} color={theme.textSecondary} />
+              <TextInput
+                value={searchValue}
+                onChangeText={onSearchChange}
+                placeholder={searchPlaceholder}
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.searchInput, { color: theme.text }]}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {!!searchValue && (
+                <Pressable onPress={() => onSearchChange?.('')} hitSlop={Spacing.two}>
+                  <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+                </Pressable>
+              )}
+            </ThemedView>
+          )}
+          <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
+            {options.length === 0 && (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+                {emptyText}
+              </ThemedText>
+            )}
+            {options.map((option, index) => {
               const active = option === selected;
               return (
                 <Pressable
-                  key={option}
+                  key={`${option}-${index}`}
                   onPress={() => onSelect(option)}
                   style={({ pressed }) => pressed && styles.pressed}>
                   <ThemedView
@@ -79,6 +123,22 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     lineHeight: 28,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.three,
+    minHeight: 48,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+  },
+  empty: {
+    textAlign: 'center',
+    paddingVertical: Spacing.four,
   },
   option: {
     flexDirection: 'row',

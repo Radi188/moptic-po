@@ -22,6 +22,8 @@ type RawItem = {
   name?: string;
   category?: string;
   category_name?: string;
+  category_id?: number | string;
+  stock_type?: string;
   brand?: string;
   brand_name?: string;
   barcode?: string;
@@ -84,8 +86,10 @@ function mapItem(row: RawItem): InventoryProduct {
     name: row.item_name ?? row.name ?? row.item_code ?? row.code ?? "",
     nameKhmer: "",
     category: row.category ?? row.category_name ?? "",
+    categoryId: row.category_id != null ? String(row.category_id) : undefined,
     brand: row.brand ?? row.brand_name ?? "",
-    stockType: "Stock",
+    // Backend stock_type is a single letter: 'N' = Not Stock, else Stock.
+    stockType: row.stock_type === "N" ? "Not Stock" : "Stock",
     barcode: row.barcode ?? "",
     cost: num(row.purchase_cost ?? row.cost),
     price: num(
@@ -154,14 +158,12 @@ function mapPage(raw: RawPage): InventoryPage {
 export type InventoryQuery = {
   page: number;
   search?: string;
-  branchId?: string;
 };
 
 /** GET /items (or /items/search?q=) — paginated inventory. Falls back to mock. */
 export async function fetchInventory({
   page,
   search = "",
-  branchId,
 }: InventoryQuery): Promise<InventoryPage> {
   if (!isApiConfigured()) {
     const res = listProducts({ page, search, pageSize: 8 });
@@ -173,36 +175,17 @@ export async function fetchInventory({
     };
   }
   const term = search.trim();
-  const path = term ? "/items/search" : "/items";
-  // Stock on hand is per-branch, so scope the list to the active branch.
-  // Cap the page size: without it the backend may try to build the whole
-  // catalog (with per-branch stock joins) in one request and time out (504).
+  // Always use the inventory index endpoint ('/items'), which supports a
+  // `search` param and returns EVERY matching item (it left-joins stock; no
+  // status/stock_type filter). The separate '/items/search' route is the
+  // purchasing item-picker — it filters status=1 & stock_type='S' and returns a
+  // reduced shape, so it hides Not-Stock and newly created items.
+  // Cap the page size so the backend doesn't build the whole catalog at once.
   const params: Record<string, string | number> = { page, per_page: 20 };
-  if (term) params.q = term;
-  if (branchId) params.branch_id = branchId;
-  const { data } = await api.get<RawPage>(path, { params });
+  if (term) params.search = term;
+  const { data } = await api.get<RawPage>("/items", { params });
 
   const result = mapPage(data);
-
-  // The list ('/items') and search ('/items/search') endpoints wrap their data
-  // differently; this surfaces the raw shape so an empty list is easy to debug
-  // against the backend (which envelope, how many rows, top-level keys).
-  if (__DEV__) {
-    const top = Array.isArray(data)
-      ? "[array]"
-      : Object.keys(data ?? {}).join(", ");
-    console.log(
-      `[inventory] GET ${path}`,
-      JSON.stringify(params),
-      `→ keys: {${top}} · mapped ${result.items.length} item(s) · total=${result.total}`,
-    );
-    if (result.items.length === 0) {
-      console.log(
-        "[inventory] empty result, raw body:",
-        JSON.stringify(data)?.slice(0, 800),
-      );
-    }
-  }
 
   return result;
 }
