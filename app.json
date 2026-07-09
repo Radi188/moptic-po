@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "M Optic-PO",
+    "name": "M-Optic Stock",
     "slug": "moptic",
     "version": "1.0.2",
     "runtimeVersion": {
@@ -15,7 +15,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.moptic.staff",
-      "buildNumber": "5",
+      "buildNumber": "7",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false

@@ -75,6 +75,8 @@ function logTiming(
     ?.metadata?.start;
   const ms = start ? Date.now() - start : undefined;
   const method = config?.method?.toUpperCase() ?? "GET";
+  const url = `${config?.baseURL ?? ""}${config?.url ?? ""}`;
+  console.log(`[api] ${method} ${url} -> ${status ?? code ?? "?"} (${ms ?? "?"}ms)`);
 }
 
 /** Pulls a readable message from Laravel responses ({message} or {errors:{field:[...]}}). */

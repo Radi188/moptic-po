@@ -55,7 +55,20 @@ type RawSummary = {
   item_count?: string | number;
 };
 
-type RawResp = { summary?: RawSummary; data?: RawItem[] };
+/**
+ * The endpoint groups sold items by category: each `data` entry is a category
+ * with a nested `items` array (it carries `category_*`/`item_count` but NO
+ * item fields of its own). We flatten these groups into a flat item list.
+ */
+type RawGroup = {
+  category_id?: number | string;
+  category_name?: string;
+  total_qty?: string | number;
+  item_count?: string | number;
+  items?: RawItem[];
+};
+
+type RawResp = { summary?: RawSummary; data?: Array<RawItem | RawGroup> };
 
 const num = (v: string | number | undefined | null) => Number(v ?? 0) || 0;
 
@@ -91,8 +104,17 @@ export async function fetchBranchSales({ date, branchId }: BranchSalesQuery): Pr
   const { data } = await api.get<RawResp>(ENDPOINT, {
     params: { date, branch_id: branchId },
   });
+  // `data` is an array of category groups (each with a nested `items` array).
+  // Flatten to a flat item list; fall back to treating an entry as an item
+  // itself if a future response is already flat (no `items` array).
+  const entries = data.data ?? [];
+  const rawItems = entries.flatMap((entry) =>
+    Array.isArray((entry as RawGroup).items)
+      ? ((entry as RawGroup).items as RawItem[])
+      : [entry as RawItem],
+  );
   return {
     summary: mapSummary(data.summary ?? {}),
-    items: (data.data ?? []).map(mapItem),
+    items: rawItems.map(mapItem),
   };
 }

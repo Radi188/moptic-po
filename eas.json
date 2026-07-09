@@ -26,10 +26,11 @@
       }
     },
     "production": {
-      "distribution": "internal",
+      "distribution": "store",
       "autoIncrement": true,
       "channel": "production",
       "environment": "production",
+      "ios": {},
       "android": {
         "buildType": "apk"
       },
@@ -41,6 +42,10 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6788588798"
+      }
+    }
   }
 }

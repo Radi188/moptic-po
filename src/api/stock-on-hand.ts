@@ -186,17 +186,26 @@ export async function fetchWarehouseStockMap(
     for (const it of items) if (it.id) map[it.id] = it.qty;
   };
 
+  // The backend rate-limits (HTTP 429) bursts of parallel requests, so fetch the
+  // remaining pages in small concurrent batches instead of all at once. A failed
+  // page is skipped rather than aborting the whole map.
+  const CONCURRENCY = 3;
+
   const first = await fetchStockOnHand({ page: 1, perPage: PER_PAGE, warehouseId, inStock: true });
   add(first.items);
 
   const lastPage = Math.min(first.lastPage, MAX_PAGES);
-  if (lastPage > 1) {
-    const rest = await Promise.all(
-      Array.from({ length: lastPage - 1 }, (_, i) =>
-        fetchStockOnHand({ page: i + 2, perPage: PER_PAGE, warehouseId, inStock: true }),
+  const pages = Array.from({ length: Math.max(0, lastPage - 1) }, (_, i) => i + 2);
+  for (let i = 0; i < pages.length; i += CONCURRENCY) {
+    const batch = pages.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((p) =>
+        fetchStockOnHand({ page: p, perPage: PER_PAGE, warehouseId, inStock: true }).catch(
+          () => null,
+        ),
       ),
     );
-    for (const pg of rest) add(pg.items);
+    for (const pg of results) if (pg) add(pg.items);
   }
   return map;
 }
