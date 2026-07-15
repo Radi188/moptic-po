@@ -33,6 +33,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatMoney } from '@/data/inventory';
 import { SkeletonList } from '@/components/skeleton';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -42,24 +43,24 @@ const SHORT = '#e5484d';
 // Pagination/infinite-scroll is disabled — request all items in a single page.
 const ALL_ITEMS_PER_PAGE = 1000;
 
-const OVERAGE_REASONS = [
-  'Found extra stock',
-  'Customer return not recorded',
-  'Supplier over-delivery',
-  'Previous miscount',
-  'Data entry error',
-  'Other',
-];
-const SHORTAGE_REASONS = [
-  'Damaged',
-  'Expired',
-  'Lost or missing',
-  'Theft',
-  'Sold not recorded',
-  'Previous miscount',
-  'Data entry error',
-  'Other',
-];
+const OVERAGE_REASON_KEYS = [
+  'reason.foundExtra',
+  'reason.customerReturn',
+  'reason.supplierOver',
+  'reason.previousMiscount',
+  'reason.dataEntryError',
+  'reason.other',
+] as const;
+const SHORTAGE_REASON_KEYS = [
+  'reason.damaged',
+  'reason.expired',
+  'reason.lostMissing',
+  'reason.theft',
+  'reason.soldNotRecorded',
+  'reason.previousMiscount',
+  'reason.dataEntryError',
+  'reason.other',
+] as const;
 
 type Edit = { counted: string; reason: string };
 
@@ -67,6 +68,9 @@ export default function StockCountDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useTranslation();
+  const overageReasons = OVERAGE_REASON_KEYS.map((k) => t(k));
+  const shortageReasons = SHORTAGE_REASON_KEYS.map((k) => t(k));
 
   const [header, setHeader] = useState<StockCountDetail | null>(null);
   const [items, setItems] = useState<StockCountItem[]>([]);
@@ -109,14 +113,14 @@ export default function StockCountDetailScreen() {
         setItems(result.items);
       } catch (e) {
         if (reqId === requestId.current) {
-          setError(e instanceof Error ? e.message : 'Failed to load items.');
+          setError(e instanceof Error ? e.message : t('count.loadItemsError'));
           setItems([]);
         }
       } finally {
         if (reqId === requestId.current) setLoading(false);
       }
     },
-    [id],
+    [id, t],
   );
 
   useEffect(() => {
@@ -192,7 +196,7 @@ export default function StockCountDetailScreen() {
       loadHeader();
       await load(search, onlyDiscrepancy, categoryId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save counts.');
+      setError(e instanceof Error ? e.message : t('count.saveError'));
     } finally {
       setSaving(false);
     }
@@ -200,15 +204,15 @@ export default function StockCountDetailScreen() {
 
   function confirmComplete() {
     if (pending.length > 0) {
-      Alert.alert('Unsaved counts', 'Save your counts before completing the count.');
+      Alert.alert(t('count.unsavedTitle'), t('count.unsavedBody'));
       return;
     }
     Alert.alert(
-      'Complete count?',
-      'This finalizes the count and locks further edits. Stock will be adjusted to the counted quantities.',
+      t('count.completeTitle'),
+      t('count.completeBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Complete', style: 'destructive', onPress: runComplete },
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('count.complete'), style: 'destructive', onPress: runComplete },
       ],
     );
   }
@@ -219,7 +223,10 @@ export default function StockCountDetailScreen() {
       await completeStockCount(id);
       loadHeader();
     } catch (e) {
-      Alert.alert('Failed', e instanceof Error ? e.message : 'Could not complete the count.');
+      Alert.alert(
+        t('transfers.updateFailedTitle'),
+        e instanceof Error ? e.message : t('count.completeFailBody'),
+      );
     } finally {
       setCompleting(false);
     }
@@ -233,8 +240,8 @@ export default function StockCountDetailScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={header?.reference || 'Stock Count'}
-        subtitle={locked ? 'Completed · view only' : 'Count & reconcile'}
+        title={header?.reference || t('settings.row.stockCount')}
+        subtitle={locked ? t('count.subtitleLocked') : t('count.subtitleActive')}
         onBack={() => router.back()}
       />
 
@@ -265,7 +272,7 @@ export default function StockCountDetailScreen() {
                   <TextInput
                     value={search}
                     onChangeText={setSearch}
-                    placeholder="Search item"
+                    placeholder={t('filters.searchItem')}
                     placeholderTextColor={theme.textSecondary}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -289,7 +296,7 @@ export default function StockCountDetailScreen() {
                   <ThemedText
                     type="small"
                     style={onlyDiscrepancy ? styles.toggleActive : { color: theme.textSecondary }}>
-                    Diff
+                    {t('count.diff')}
                   </ThemedText>
                 </Pressable>
               </View>
@@ -300,7 +307,7 @@ export default function StockCountDetailScreen() {
                   showsHorizontalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.tabs}>
-                  {[{ id: '', name: 'All' }, ...categories].map((cat) => {
+                  {[{ id: '', name: t('transfers.filterAll') }, ...categories].map((cat) => {
                     const active = categoryId === cat.id;
                     return (
                       <Pressable
@@ -345,7 +352,7 @@ export default function StockCountDetailScreen() {
               <SkeletonList />
             ) : (
               <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-                {error ?? 'No items.'}
+                {error ?? t('count.noItems')}
               </ThemedText>
             )
           }
@@ -365,7 +372,7 @@ export default function StockCountDetailScreen() {
                 <ActivityIndicator color={theme.tint} />
               ) : (
                 <ThemedText style={[styles.saveText, { color: theme.tint }]}>
-                  {pending.length > 0 ? `Save (${pending.length})` : 'Save'}
+                  {pending.length > 0 ? t('count.saveWithCount', { count: pending.length }) : t('common.save')}
                 </ThemedText>
               )}
             </Pressable>
@@ -376,7 +383,7 @@ export default function StockCountDetailScreen() {
               {completing ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <ThemedText style={styles.completeText}>Complete</ThemedText>
+                <ThemedText style={styles.completeText}>{t('count.complete')}</ThemedText>
               )}
             </Pressable>
           </View>
@@ -387,8 +394,8 @@ export default function StockCountDetailScreen() {
 
       <OptionSheet
         visible={reasonFor !== null}
-        title={reasonDiff > 0 ? 'Overage reason' : 'Shortage reason'}
-        options={reasonDiff > 0 ? OVERAGE_REASONS : SHORTAGE_REASONS}
+        title={reasonDiff > 0 ? t('count.overageReason') : t('count.shortageReason')}
+        options={reasonDiff > 0 ? overageReasons : shortageReasons}
         selected={reasonItem ? reasonOf(reasonItem) || undefined : undefined}
         onSelect={(value) => {
           if (reasonFor) setReason(reasonFor, value);
@@ -407,13 +414,14 @@ function TotalsCard({
   header: StockCountDetail;
   theme: ReturnType<typeof useTheme>;
 }) {
-  const t = header.totals;
+  const { t } = useTranslation();
+  const totals = header.totals;
   return (
     <ThemedView type="backgroundElement" style={styles.totals}>
-      <Stat label="Items" value={t.totalItems} theme={theme} />
-      <Stat label="Counted" value={t.countedItems} theme={theme} />
-      <Stat label="Shortage" value={formatMoney(t.shortageValue)} color={SHORT} theme={theme} />
-      <Stat label="Overage" value={formatMoney(t.overageValue)} color={OVER} theme={theme} />
+      <Stat label={t('field.items')} value={totals.totalItems} theme={theme} />
+      <Stat label={t('count.counted')} value={totals.countedItems} theme={theme} />
+      <Stat label={t('count.shortage')} value={formatMoney(totals.shortageValue)} color={SHORT} theme={theme} />
+      <Stat label={t('count.overage')} value={formatMoney(totals.overageValue)} color={OVER} theme={theme} />
     </ThemedView>
   );
 }
@@ -458,6 +466,7 @@ function CountItemRow({
   onOpenReason: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   const hasCount = counted !== '';
   const diff = hasCount ? (parseInt(counted, 10) || 0) - item.systemQty : 0;
   const diffColor = diff > 0 ? OVER : diff < 0 ? SHORT : theme.textSecondary;
@@ -473,12 +482,12 @@ function CountItemRow({
             {item.itemCode}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            System: {item.systemQty}
+            {t('count.system')}: {item.systemQty}
           </ThemedText>
         </View>
         <View style={styles.actualWrap}>
           <ThemedText type="small" themeColor="textSecondary">
-            Counted
+            {t('count.counted')}
           </ThemedText>
           <ThemedView type="background" style={styles.actualInputWrap}>
             <TextInput
@@ -499,7 +508,7 @@ function CountItemRow({
           <View style={[styles.diffBadge, { backgroundColor: `${diffColor}22` }]}>
             <Ionicons name={diff > 0 ? 'arrow-up' : 'arrow-down'} size={13} color={diffColor} />
             <ThemedText type="small" style={{ color: diffColor, fontWeight: '700' }}>
-              {diff > 0 ? `Over ${diff}` : `Short ${Math.abs(diff)}`}
+              {diff > 0 ? t('count.over', { n: diff }) : t('count.short', { n: Math.abs(diff) })}
             </ThemedText>
           </View>
           <Pressable
@@ -511,7 +520,7 @@ function CountItemRow({
               <ThemedText
                 numberOfLines={1}
                 style={[styles.reasonValue, { color: reason ? theme.text : theme.textSecondary }]}>
-                {reason || (diff > 0 ? 'Select overage reason' : 'Select shortage reason')}
+                {reason || (diff > 0 ? t('count.selectOverageReason') : t('count.selectShortageReason'))}
               </ThemedText>
               {!locked && <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />}
             </ThemedView>

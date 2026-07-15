@@ -24,6 +24,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import type { Branch } from '@/constants/branches';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -55,6 +56,7 @@ export default function StockRefillScreen() {
   const theme = useTheme();
   const { isTablet } = useResponsive();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branches = session?.branches ?? EMPTY_BRANCHES;
 
   const [date, setDate] = useState(yesterday);
@@ -108,14 +110,14 @@ export default function StockRefillScreen() {
         setSummaries(map);
       } catch (e) {
         if (id === requestId.current) {
-          setError(e instanceof Error ? e.message : 'Failed to load daily sales.');
+          setError(e instanceof Error ? e.message : t('refill.loadError'));
           setSummaries({});
         }
       } finally {
         if (id === requestId.current) setLoading(false);
       }
     },
-    [branches],
+    [branches, t],
   );
 
   useEffect(() => {
@@ -147,7 +149,7 @@ export default function StockRefillScreen() {
 
   function openBranch(branch: Branch) {
     if (!source) {
-      setError('Please select a source warehouse first.');
+      setError(t('refill.selectSourceFirst'));
       return;
     }
     // The refill is a warehouse→warehouse transfer. The destination warehouse is
@@ -168,15 +170,15 @@ export default function StockRefillScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="Stock Refill"
-        subtitle="Refill branches by daily sales"
+        title={t('home.refillHero.title')}
+        subtitle={t('home.refillHero.subtitle')}
         onBack={() => router.back()}
       />
 
       <View style={styles.controls}>
         <View style={styles.fieldGroup}>
           <ThemedText type="small" themeColor="textSecondary">
-            Source warehouse
+            {t('refill.sourceWarehouse')}
           </ThemedText>
           <Pressable
             onPress={() => setSourceSheet(true)}
@@ -186,7 +188,7 @@ export default function StockRefillScreen() {
               <ThemedText
                 numberOfLines={1}
                 style={[styles.selectValue, { color: source ? theme.text : theme.textSecondary }]}>
-                {source?.name ?? 'Select warehouse'}
+                {source?.name ?? t('filters.selectWarehouse')}
               </ThemedText>
               <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
             </ThemedView>
@@ -195,7 +197,7 @@ export default function StockRefillScreen() {
 
         <View style={styles.fieldGroup}>
           <ThemedText type="small" themeColor="textSecondary">
-            Sales date
+            {t('refill.salesDate')}
           </ThemedText>
           <Pressable onPress={openDatePicker} style={({ pressed }) => pressed && styles.pressed}>
             <ThemedView type="backgroundElement" style={styles.selectBox}>
@@ -219,10 +221,10 @@ export default function StockRefillScreen() {
                 <View style={styles.datePickerHeader}>
                   <Pressable onPress={() => setDatePicker(false)} hitSlop={Spacing.two}>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Cancel
+                      {t('common.cancel')}
                     </ThemedText>
                   </Pressable>
-                  <ThemedText type="smallBold">Sales date</ThemedText>
+                  <ThemedText type="smallBold">{t('refill.salesDate')}</ThemedText>
                   <Pressable
                     onPress={() => {
                       setDate(tempDate);
@@ -230,7 +232,7 @@ export default function StockRefillScreen() {
                     }}
                     hitSlop={Spacing.two}>
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Done
+                      {t('common.done')}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -278,14 +280,14 @@ export default function StockRefillScreen() {
         )}
         ListEmptyComponent={
           <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-            {error ?? 'No branches available.'}
+            {error ?? t('home.refill.empty')}
           </ThemedText>
         }
       />
 
       <OptionSheet
         visible={sourceSheet}
-        title="Source warehouse"
+        title={t('refill.sourceWarehouse')}
         options={warehouseOptions.map((o) => o.name)}
         selected={source?.name}
         onSelect={(value) => {
@@ -314,6 +316,7 @@ function BranchCard({
   onPress: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   const sold = summary && summary.itemCount > 0;
 
   return (
@@ -324,20 +327,23 @@ function BranchCard({
         </View>
         <View style={styles.cardMain}>
           <ThemedText type="smallBold" numberOfLines={1}>
-            {branch.name || `Branch ${branch.id}`}
+            {branch.name || t('home.branchFallback', { id: branch.id })}
           </ThemedText>
           {loading && !summary ? (
             <ThemedText type="small" themeColor="textSecondary">
-              Loading sales…
+              {t('home.loadingSales')}
             </ThemedText>
           ) : sold ? (
             <ThemedText type="small" themeColor="textSecondary">
-              {summary!.itemCount} {summary!.itemCount === 1 ? 'item' : 'items'} ·{' '}
-              {summary!.totalQty} sold
+              {t('refill.soldToday', {
+                count: summary!.itemCount,
+                unit: summary!.itemCount === 1 ? t('common.item') : t('common.items'),
+                qty: summary!.totalQty,
+              })}
             </ThemedText>
           ) : (
             <ThemedText type="small" themeColor="textSecondary">
-              No sales this day
+              {t('refill.noSalesDay')}
             </ThemedText>
           )}
         </View>

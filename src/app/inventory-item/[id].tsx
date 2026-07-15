@@ -30,6 +30,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
+import { useTranslation } from "@/contexts/i18n";
 import {
   addProduct,
   BRANDS,
@@ -62,6 +63,7 @@ export default function InventoryItemFormScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const isNew = id === "new";
   // The list passes the selected row as a JSON param (it comes from the API, not
@@ -164,10 +166,10 @@ export default function InventoryItemFormScreen() {
   if (!isNew && !existing) {
     return (
       <ThemedView style={styles.container}>
-        <ScreenHeader title="Not found" onBack={() => router.back()} />
+        <ScreenHeader title={t("common.notFound")} onBack={() => router.back()} />
         <View style={styles.centered}>
           <ThemedText themeColor="textSecondary">
-            This product no longer exists.
+            {t("invForm.notFoundBody")}
           </ThemedText>
         </View>
       </ThemedView>
@@ -184,25 +186,25 @@ export default function InventoryItemFormScreen() {
     }
   > = {
     brand: {
-      title: "Select brand",
+      title: t("invForm.selectBrand"),
       options: BRANDS,
       selected: brand,
       onSelect: setBrand,
     },
     status: {
-      title: "Item status",
-      options: ["Active", "Inactive"],
-      selected: status === "active" ? "Active" : "Inactive",
-      onSelect: (v) => setStatus(v === "Active" ? "active" : "inactive"),
+      title: t("invForm.itemStatus"),
+      options: [t("common.active"), t("common.inactive")],
+      selected: status === "active" ? t("common.active") : t("common.inactive"),
+      onSelect: (v) => setStatus(v === t("common.active") ? "active" : "inactive"),
     },
     stockType: {
-      title: "Stock type",
+      title: t("invForm.stockType"),
       options: STOCK_TYPES,
       selected: stockType,
       onSelect: setStockType,
     },
     category: {
-      title: "Select category",
+      title: t("filters.selectCategory"),
       options: categoryOptions.map((o) => o.label),
       selected:
         categoryOptions.find((o) => o.id === categoryId)?.label ?? category,
@@ -244,17 +246,17 @@ export default function InventoryItemFormScreen() {
   async function handleSave() {
     if (submitting) return;
     if (!name.trim()) {
-      setError("Product name is required.");
+      setError(t("invForm.nameRequired"));
       setTab("general");
       return;
     }
     if (!code.trim()) {
-      setError("Item code is required.");
+      setError(t("invForm.codeRequired"));
       setTab("general");
       return;
     }
     if (!categoryId) {
-      setError("Please select a category.");
+      setError(t("invForm.categoryRequired"));
       setTab("general");
       return;
     }
@@ -283,9 +285,11 @@ export default function InventoryItemFormScreen() {
     if (!isApiConfigured()) {
       if (isNew) addProduct(input);
       else updateProduct(id, input);
-      Alert.alert("Saved", isNew ? "Product created." : "Changes saved.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      Alert.alert(
+        t("invForm.saved"),
+        isNew ? t("invForm.productCreated") : t("invForm.changesSaved"),
+        [{ text: t("common.ok"), onPress: () => router.back() }],
+      );
       return;
     }
 
@@ -307,15 +311,15 @@ export default function InventoryItemFormScreen() {
           // item into a draft and drop it from the branch inventory list).
           status: status === "active" ? 1 : 0,
         });
-        Alert.alert("Saved", "Changes saved.", [
-          { text: "OK", onPress: () => router.back() },
+        Alert.alert(t("invForm.saved"), t("invForm.changesSaved"), [
+          { text: t("common.ok"), onPress: () => router.back() },
         ]);
       } catch (e) {
         const message =
-          e instanceof Error ? e.message : "Failed to save changes.";
+          e instanceof Error ? e.message : t("invForm.saveChangesError");
         setError(message);
         setTab("general");
-        Alert.alert("Could not save changes", message);
+        Alert.alert(t("invForm.couldNotSaveChanges"), message);
       } finally {
         setSubmitting(false);
       }
@@ -342,10 +346,9 @@ export default function InventoryItemFormScreen() {
       // If the server accepted the request but returned no item id, the create
       // likely didn't persist — surface that instead of a false "created".
       if (!created.id) {
-        const msg =
-          "The server accepted the request (2xx) but returned no item id, so the product may not have been saved. Check the backend / API response.";
+        const msg = t("invForm.noIdMsg");
         setError(msg);
-        Alert.alert("Saved, but no item id returned", msg);
+        Alert.alert(t("invForm.noIdTitle"), msg);
         return;
       }
 
@@ -361,35 +364,36 @@ export default function InventoryItemFormScreen() {
           await createStockAdjustment({
             warehouse_id: warehouseId,
             branch_login_id: branchLoginId,
-            item_id: Number(created.id),
-            adjust_qty: initialQty,
-            adjust_type: "increase",
-            description: "Initial stock on item creation",
-            stock_unique_id: null,
+            items: [
+              {
+                item_id: Number(created.id),
+                adjust_qty: initialQty,
+                adjust_type: "correction_in",
+                description: "Initial stock on item creation",
+              },
+            ],
           });
         } catch (stockErr) {
-          note =
-            "\n\nThe item was created, but its opening stock could not be set automatically. Add it via Stock Adjustment.";
+          note = t("invForm.openingStockFailNote");
         }
       } else if (initialQty > 0) {
-        note =
-          "\n\nThe item was created, but opening stock was not set (no default warehouse/branch). Add it via Stock Adjustment.";
+        note = t("invForm.openingStockNoWhNote");
       }
 
       // Confirm success explicitly — otherwise a silent back() looks like
       // nothing happened. router.back() returns to the list, which refreshes
       // on focus so the new item appears.
       Alert.alert(
-        "Product created",
-        `“${name.trim()}” was added to inventory.${note}`,
-        [{ text: "OK", onPress: () => router.back() }],
+        t("invForm.productCreatedTitle"),
+        t("invForm.productCreatedBody", { name: name.trim(), note }),
+        [{ text: t("common.ok"), onPress: () => router.back() }],
       );
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to save item.";
+      const message = e instanceof Error ? e.message : t("invForm.saveItemError");
       setError(message);
       setTab("general");
       // Surface the failure in a dialog so it can't be missed below the fold.
-      Alert.alert("Could not create product", message);
+      Alert.alert(t("invForm.couldNotCreate"), message);
     } finally {
       setSubmitting(false);
     }
@@ -398,8 +402,8 @@ export default function InventoryItemFormScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={isNew ? "New Product" : existing!.name}
-        subtitle={isNew ? "Add to inventory" : "Edit product"}
+        title={isNew ? t("invForm.newTitle") : existing!.name}
+        subtitle={isNew ? t("invForm.newSubtitle") : t("invForm.editSubtitle")}
         onBack={() => router.back()}
       />
 
@@ -409,8 +413,8 @@ export default function InventoryItemFormScreen() {
           onChange={setTab}
           theme={theme}
           options={[
-            { key: "general", label: "General Details" },
-            { key: "gallery", label: "Product Gallery" },
+            { key: "general", label: t("invForm.tabGeneral") },
+            { key: "gallery", label: t("invForm.tabGallery") },
           ]}
         />
       </View>
@@ -426,10 +430,10 @@ export default function InventoryItemFormScreen() {
           {tab === "general" ? (
             <>
               <Field
-                label="Item Code"
+                label={t("invForm.itemCode")}
                 value={code}
                 onChangeText={setCode}
-                placeholder="Item Code"
+                placeholder={t("invForm.itemCode")}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 theme={theme}
@@ -440,25 +444,25 @@ export default function InventoryItemFormScreen() {
                 onChange={setLang}
                 theme={theme}
                 options={[
-                  { key: "en", label: "English" },
-                  { key: "kh", label: "Khmer" },
+                  { key: "en", label: t("language.en") },
+                  { key: "kh", label: t("language.km") },
                 ]}
               />
 
               {lang === "en" ? (
                 <>
                   <Field
-                    label="Item Name (EN)"
+                    label={t("invForm.nameEn")}
                     value={name}
                     onChangeText={setName}
-                    placeholder="Item Name in English"
+                    placeholder={t("invForm.nameEnPlaceholder")}
                     theme={theme}
                   />
                   <Field
-                    label="Description (EN)"
+                    label={t("invForm.descEn")}
                     value={description}
                     onChangeText={setDescription}
-                    placeholder="Description in English"
+                    placeholder={t("invForm.descEnPlaceholder")}
                     multiline
                     theme={theme}
                   />
@@ -466,14 +470,14 @@ export default function InventoryItemFormScreen() {
               ) : (
                 <>
                   <Field
-                    label="Item Name (KH)"
+                    label={t("invForm.nameKh")}
                     value={nameKhmer}
                     onChangeText={setNameKhmer}
                     placeholder="ឈ្មោះទំនិញ"
                     theme={theme}
                   />
                   <Field
-                    label="Description (KH)"
+                    label={t("invForm.descKh")}
                     value={descriptionKhmer}
                     onChangeText={setDescriptionKhmer}
                     placeholder="ការពិពណ៌នា"
@@ -485,7 +489,7 @@ export default function InventoryItemFormScreen() {
 
               <View style={styles.fieldGroup}>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Thumbnail
+                  {t("invForm.thumbnail")}
                 </ThemedText>
                 <ThemedView type="backgroundElement" style={styles.thumbBox}>
                   {thumbnail ? (
@@ -511,42 +515,42 @@ export default function InventoryItemFormScreen() {
                 >
                   <Ionicons name="camera-outline" size={18} color="#ffffff" />
                   <ThemedText style={styles.darkButtonText}>
-                    Choose Thumbnail
+                    {t("invForm.chooseThumbnail")}
                   </ThemedText>
                 </Pressable>
               </View>
 
               <SelectField
-                label="Brand"
+                label={t("productDetails.brand")}
                 value={brand}
-                placeholder="Select brand"
+                placeholder={t("invForm.selectBrand")}
                 icon="ribbon-outline"
                 onPress={() => setSheet("brand")}
                 theme={theme}
               />
               <SelectField
-                label="Item Status"
-                value={status === "active" ? "Active" : "Inactive"}
+                label={t("invForm.itemStatus")}
+                value={status === "active" ? t("common.active") : t("common.inactive")}
                 icon="ellipse-outline"
                 onPress={() => setSheet("status")}
                 theme={theme}
               />
               <SelectField
-                label="Stock Type"
+                label={t("invForm.stockType")}
                 value={stockType}
                 icon="cube-outline"
                 onPress={() => setSheet("stockType")}
                 theme={theme}
               />
               <SelectField
-                label="Category"
+                label={t("invForm.category")}
                 value={category}
                 placeholder={
                   categoriesError
-                    ? "Could not load categories — tap to retry"
+                    ? t("invForm.categoriesError")
                     : categoryOptions.length === 0
-                      ? "Loading categories…"
-                      : "Select category"
+                      ? t("invForm.categoriesLoading")
+                      : t("filters.selectCategory")
                 }
                 icon="pricetag-outline"
                 onPress={() => {
@@ -566,11 +570,11 @@ export default function InventoryItemFormScreen() {
               )}
 
               <ThemedText type="smallBold" style={styles.sectionTitle}>
-                Pricing & Stock
+                {t("invForm.pricingStock")}
               </ThemedText>
               <View style={styles.row}>
                 <Field
-                  label="Cost"
+                  label={t("productDetails.cost")}
                   value={cost}
                   onChangeText={setCost}
                   placeholder="0"
@@ -579,7 +583,7 @@ export default function InventoryItemFormScreen() {
                   containerStyle={styles.rowItem}
                 />
                 <Field
-                  label="Sale Price"
+                  label={t("invForm.salePrice")}
                   value={price}
                   onChangeText={setPrice}
                   placeholder="0"
@@ -590,17 +594,17 @@ export default function InventoryItemFormScreen() {
               </View>
               <View style={styles.row}>
                 <Field
-                  label="Barcode"
+                  label={t("productDetails.barcode")}
                   value={barcode}
                   onChangeText={setBarcode}
-                  placeholder="Barcode"
+                  placeholder={t("productDetails.barcode")}
                   autoCapitalize="none"
                   autoCorrect={false}
                   theme={theme}
                   containerStyle={styles.rowItem}
                 />
                 <Field
-                  label="Alert Stock"
+                  label={t("invForm.alertStock")}
                   value={alertStock}
                   onChangeText={setAlertStock}
                   placeholder="0"
@@ -610,7 +614,7 @@ export default function InventoryItemFormScreen() {
                 />
               </View>
               <Field
-                label="Stock on hand"
+                label={t("invForm.stockOnHand")}
                 value={stock}
                 onChangeText={setStock}
                 placeholder="0"
@@ -621,7 +625,7 @@ export default function InventoryItemFormScreen() {
           ) : (
             <View style={styles.fieldGroup}>
               <ThemedText type="small" themeColor="textSecondary">
-                Add product photos
+                {t("invForm.addPhotos")}
               </ThemedText>
               <View style={styles.galleryGrid}>
                 {gallery.map((uri, index) => (
@@ -675,7 +679,7 @@ export default function InventoryItemFormScreen() {
               <Ionicons name="checkmark" size={18} color="#ffffff" />
             )}
             <ThemedText style={styles.saveButtonText}>
-              {submitting ? "Saving…" : isNew ? "Save Item" : "Save changes"}
+              {submitting ? t("invForm.saving") : isNew ? t("invForm.saveItem") : t("common.saveChanges")}
             </ThemedText>
           </Pressable>
         </ScrollView>
@@ -689,8 +693,8 @@ export default function InventoryItemFormScreen() {
         searchable={sheet === "category"}
         searchValue={categorySearch}
         onSearchChange={setCategorySearch}
-        searchPlaceholder="Search categories…"
-        emptyText={categoriesError ?? "No categories found."}
+        searchPlaceholder={t("invForm.searchCategories")}
+        emptyText={categoriesError ?? t("invForm.noCategories")}
         onSelect={(value) => {
           activeSheet?.onSelect(value);
           setError(null);

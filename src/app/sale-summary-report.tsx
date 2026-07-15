@@ -31,6 +31,7 @@ import { ThemedView } from '@/components/themed-view';
 import type { Branch } from '@/constants/branches';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation, type TranslateFn } from '@/contexts/i18n';
 import type { Stat } from '@/data/dashboard';
 import { formatDate } from '@/data/purchase-orders';
 import { useTheme } from '@/hooks/use-theme';
@@ -47,14 +48,14 @@ function withThousands(n: number) {
     .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-function summaryStats(s: SaleSummaryTotals): Stat[] {
+function summaryStats(t: TranslateFn, s: SaleSummaryTotals): Stat[] {
   return [
-    { key: 'invoices', label: 'Invoices', value: withThousands(s.totalInvoices), icon: 'receipt-outline', tone: 'brand' },
-    { key: 'qty', label: 'Qty Sold', value: withThousands(s.totalQty), icon: 'layers-outline', tone: 'brand' },
-    { key: 'items', label: 'Items', value: withThousands(s.itemCount), icon: 'cube-outline', tone: 'brand' },
+    { key: 'invoices', label: t('saleSummary.stat.invoices'), value: withThousands(s.totalInvoices), icon: 'receipt-outline', tone: 'brand' },
+    { key: 'qty', label: t('saleSummary.stat.qtySold'), value: withThousands(s.totalQty), icon: 'layers-outline', tone: 'brand' },
+    { key: 'items', label: t('saleSummary.stat.items'), value: withThousands(s.itemCount), icon: 'cube-outline', tone: 'brand' },
     {
       key: 'categories',
-      label: 'Categories',
+      label: t('saleSummary.stat.categories'),
       value: withThousands(s.categoryCount),
       icon: 'pricetags-outline',
       tone: 'brand',
@@ -66,6 +67,7 @@ export default function SaleSummaryReportScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const [branch, setBranch] = useState<Branch | null>(session?.branch ?? null);
   const [branchSheet, setBranchSheet] = useState(false);
@@ -104,14 +106,14 @@ export default function SaleSummaryReportScreen() {
         // by default is more useful than making the user open each category.
         setExpanded(q ? new Set(report.categories.map((c) => c.categoryId)) : new Set());
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load report.');
+        setError(e instanceof Error ? e.message : t('common.loadReportError'));
         setCategories([]);
         setSummary(null);
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [t],
   );
 
   function toggleCategory(id: string) {
@@ -149,18 +151,18 @@ export default function SaleSummaryReportScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScreenHeader title="Sale Summary Report" subtitle="Sales by item" onBack={() => router.back()} />
+      <ScreenHeader title={t('settings.row.saleSummaryReport')} subtitle={t('saleSummary.subtitle')} onBack={() => router.back()} />
 
       <View style={styles.filters}>
         <View style={styles.dateRow}>
           <DateField
-            label="From"
+            label={t('filters.from')}
             value={formatDate(dateFrom.toISOString())}
             onPress={() => openDatePicker('from')}
             theme={theme}
           />
           <DateField
-            label="To"
+            label={t('filters.to')}
             value={formatDate(dateTo.toISOString())}
             onPress={() => openDatePicker('to')}
             theme={theme}
@@ -171,7 +173,7 @@ export default function SaleSummaryReportScreen() {
           <ThemedView type="backgroundElement" style={styles.selectBox}>
             <Ionicons name="business-outline" size={18} color={theme.textSecondary} />
             <ThemedText numberOfLines={1} style={[styles.selectValue, { color: theme.text }]}>
-              {branch?.name ?? 'All branches'}
+              {branch?.name ?? t('filters.allBranches')}
             </ThemedText>
             <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
           </ThemedView>
@@ -182,7 +184,7 @@ export default function SaleSummaryReportScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search item"
+            placeholder={t('filters.searchItem')}
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -216,11 +218,11 @@ export default function SaleSummaryReportScreen() {
                 <View style={styles.datePickerHeader}>
                   <Pressable onPress={() => setDatePicker(null)} hitSlop={Spacing.two}>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Cancel
+                      {t('common.cancel')}
                     </ThemedText>
                   </Pressable>
                   <ThemedText type="smallBold">
-                    {datePicker === 'from' ? 'Date From' : 'Date To'}
+                    {datePicker === 'from' ? t('filters.dateFrom') : t('filters.dateTo')}
                   </ThemedText>
                   <Pressable
                     onPress={() => {
@@ -230,7 +232,7 @@ export default function SaleSummaryReportScreen() {
                     }}
                     hitSlop={Spacing.two}>
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Done
+                      {t('common.done')}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -277,7 +279,7 @@ export default function SaleSummaryReportScreen() {
             <SkeletonStatGrid />
           ) : summary ? (
             <View style={styles.statsGrid}>
-              {summaryStats(summary).map((stat) => (
+              {summaryStats(t, summary).map((stat) => (
                 <StatCard key={stat.key} stat={stat} />
               ))}
             </View>
@@ -296,7 +298,7 @@ export default function SaleSummaryReportScreen() {
             <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No sales for this period.'}
+              {error ?? t('saleSummary.empty')}
             </ThemedText>
           )
         }
@@ -340,16 +342,17 @@ function CategorySection({
   onToggle: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.categorySection}>
       <Pressable onPress={onToggle} style={({ pressed }) => pressed && styles.pressed}>
         <ThemedView type="backgroundElement" style={styles.categoryHeader}>
           <View style={styles.cardMain}>
             <ThemedText type="smallBold" numberOfLines={1}>
-              {category.categoryName || 'Uncategorized'}
+              {category.categoryName || t('common.uncategorized')}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {category.itemCount} {category.itemCount === 1 ? 'item' : 'items'}
+              {category.itemCount} {category.itemCount === 1 ? t('common.item') : t('common.items')}
             </ThemedText>
           </View>
           <View style={styles.qtyWrap}>
@@ -357,7 +360,7 @@ function CategorySection({
               {withThousands(category.totalQty)}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Qty sold
+              {t('common.qtySold')}
             </ThemedText>
           </View>
           <Ionicons
@@ -381,6 +384,7 @@ function CategorySection({
 }
 
 function ItemCard({ item, theme }: { item: SaleSummaryItem; theme: ReturnType<typeof useTheme> }) {
+  const { t } = useTranslation();
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
       <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
@@ -395,7 +399,7 @@ function ItemCard({ item, theme }: { item: SaleSummaryItem; theme: ReturnType<ty
           {item.itemName}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-          {item.itemCode} · {item.invoiceCount} {item.invoiceCount === 1 ? 'invoice' : 'invoices'}
+          {item.itemCode} · {item.invoiceCount} {item.invoiceCount === 1 ? t('common.invoice') : t('common.invoices')}
         </ThemedText>
       </View>
       <View style={styles.qtyWrap}>
@@ -403,7 +407,7 @@ function ItemCard({ item, theme }: { item: SaleSummaryItem; theme: ReturnType<ty
           {withThousands(item.qtySold)}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Qty sold
+          {t('common.qtySold')}
         </ThemedText>
       </View>
     </ThemedView>

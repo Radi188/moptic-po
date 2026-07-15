@@ -1,6 +1,46 @@
 import { api } from "@/api/client";
 
+/** Whether an adjustment adds to or removes from stock (used for display). */
 export type AdjustType = "increase" | "decrease";
+
+/**
+ * Category codes sent to the backend as `adjust_type`. Each code implies a
+ * direction (see INCREASE_REASONS / DECREASE_REASONS) so the UI can show +/-.
+ */
+export type AdjustReason =
+  | "found"
+  | "customer_return"
+  | "supplier_bonus"
+  | "correction_in"
+  | "loss"
+  | "expired"
+  | "damaged"
+  | "theft"
+  | "sample"
+  | "correction_out";
+
+export const INCREASE_REASONS: AdjustReason[] = [
+  "found",
+  "customer_return",
+  "supplier_bonus",
+  "correction_in",
+];
+
+export const DECREASE_REASONS: AdjustReason[] = [
+  "loss",
+  "expired",
+  "damaged",
+  "theft",
+  "sample",
+  "correction_out",
+];
+
+/** Direction implied by a reason code; unknown codes are treated as a decrease. */
+export function reasonDirection(reason: string): AdjustType {
+  return (INCREASE_REASONS as string[]).includes(reason)
+    ? "increase"
+    : "decrease";
+}
 
 export type StockAdjustment = {
   id: string;
@@ -138,31 +178,107 @@ export async function fetchStockAdjustments({
   return mapPage(data);
 }
 
-/** GET /stock-adjustments/{id} — single adjustment detail. */
+// ---- Grouped detail (one transaction, many items) ----
+
+export type StockAdjustmentItem = {
+  itemId: string;
+  itemName: string;
+  itemCode: string;
+  image: string;
+  /** Raw category code (e.g. "loss", "expired"). */
+  reason: string;
+  /** Direction implied by the reason, for +/- display. */
+  adjustType: AdjustType;
+  qty: number;
+  cost: number;
+  totalCost: number;
+  description: string;
+};
+
+export type StockAdjustmentDetail = {
+  id: string;
+  reference: string;
+  warehouseId: string;
+  warehouse: string;
+  branchLoginId: string;
+  user: string;
+  /** ISO date string. */
+  date: string;
+  items: StockAdjustmentItem[];
+};
+
+type RawDetail = RawAdjustment & {
+  branch_login_id?: number | string;
+  items?: RawAdjustment[];
+};
+
+function mapDetailItem(row: RawAdjustment): StockAdjustmentItem {
+  const reason = String(row.adjust_type ?? "");
+  return {
+    itemId: String(row.item_id ?? ""),
+    itemName: row.item_name ?? row.item_code ?? "",
+    itemCode: row.item_code ?? "",
+    image: row.image ?? "",
+    reason,
+    // Prefer the reason's direction; fall back to the event-based mapping when
+    // the code is unrecognised.
+    adjustType:
+      (INCREASE_REASONS as string[]).includes(reason) ||
+      (DECREASE_REASONS as string[]).includes(reason)
+        ? reasonDirection(reason)
+        : mapAdjustType(row),
+    qty: num(row.adjust_qty),
+    cost: num(row.adjust_cost),
+    totalCost: num(row.total_cost),
+    description: row.description ?? "",
+  };
+}
+
+function mapDetail(row: RawDetail): StockAdjustmentDetail {
+  // The backend groups items under `items`; tolerate a flat single-item row too.
+  const rawItems = row.items?.length ? row.items : [row];
+  return {
+    id: String(row.id ?? ""),
+    reference: row.transaction_ref ?? `#${row.id ?? ""}`,
+    warehouseId: String(row.warehouse_id ?? ""),
+    warehouse: row.warehouse?.warehouse_name ?? row.warehouse?.name ?? "",
+    branchLoginId: String(row.branch_login_id ?? ""),
+    user: row.user?.full_name ?? row.user?.name ?? "",
+    date: toIso(row.transaction_date),
+    items: rawItems.map(mapDetailItem),
+  };
+}
+
+/** GET /stock-adjustments/{id} — one transaction with its items. */
 export async function fetchStockAdjustment(
   id: string,
-): Promise<StockAdjustment> {
-  const { data } = await api.get<RawAdjustment | { data?: RawAdjustment }>(
+): Promise<StockAdjustmentDetail> {
+  const { data } = await api.get<RawDetail | { data?: RawDetail }>(
     `/stock-adjustments/${id}`,
   );
-  const row =
-    (data as { data?: RawAdjustment }).data ?? (data as RawAdjustment);
-  return mapAdjustment(row);
+  const row = (data as { data?: RawDetail }).data ?? (data as RawDetail);
+  return mapDetail(row);
 }
+
+// ---- Create (batched, one transaction) ----
+
+/** A single line inside a create request's `items` array. */
+export type AdjustItemInput = {
+  item_id: number;
+  adjust_qty: number;
+  adjust_type: AdjustReason;
+  /** Optional free-text note; omit when empty. */
+  description?: string;
+};
 
 /** Body for POST /stock-adjustments (relative to /api/v1/staff). */
 export type CreateStockAdjustmentBody = {
   warehouse_id: number;
   branch_login_id: number;
-  item_id: number;
-  adjust_qty: number;
-  adjust_type: AdjustType;
-  description?: string;
-  /** Only set for unique (serialized) items; null otherwise. */
-  stock_unique_id?: number | null;
+  items: AdjustItemInput[];
 };
 
-/** POST /stock-adjustments. */
+/** POST /stock-adjustments — creates every item in one transaction. */
 export async function createStockAdjustment(
   body: CreateStockAdjustmentBody,
 ): Promise<unknown> {

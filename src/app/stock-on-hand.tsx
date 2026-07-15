@@ -19,6 +19,7 @@ import {
   type StockOnHandItem,
   type StockOnHandSummary,
 } from "@/api/stock-on-hand";
+import { ItemStockSheet } from "@/components/item-stock-sheet";
 import { ListLoadingOverlay } from "@/components/list-loading-overlay";
 import { OptionSheet } from "@/components/option-sheet";
 import { ScreenHeader } from "@/components/screen-header";
@@ -29,11 +30,10 @@ import { useAuth } from "@/contexts/auth";
 import type { Stat } from "@/data/dashboard";
 import { formatMoney } from "@/data/inventory";
 import { SkeletonList } from "@/components/skeleton";
+import { useTranslation } from "@/contexts/i18n";
 import { useTheme } from "@/hooks/use-theme";
 
-const BRAND = "#232843";
-const ALL_WAREHOUSES = "All warehouses";
-const ALL_CATEGORIES = "All categories";
+const LOW = "#F5A623";
 
 function withThousands(n: number) {
   return Math.round(n)
@@ -92,9 +92,13 @@ export default function StockOnHandScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branchId = session?.branch.id;
+  const ALL_WAREHOUSES = t("filters.allWarehouses");
+  const ALL_CATEGORIES = t("filters.allCategories");
 
   const [search, setSearch] = useState("");
+  const [selectedItem, setSelectedItem] = useState<StockOnHandItem | null>(null);
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
   const [warehouseSheet, setWarehouseSheet] = useState(false);
@@ -102,7 +106,7 @@ export default function StockOnHandScreen() {
   // Accumulated from loaded rows; never shrinks so filtering keeps all options.
   const [categoryOptions, setCategoryOptions] = useState<ApiOption[]>([]);
   const [categorySheet, setCategorySheet] = useState(false);
-  const [inStock, setInStock] = useState(true);
+  const [lowStock, setLowStock] = useState(false);
 
   const [items, setItems] = useState<StockOnHandItem[]>([]);
   const [page, setPage] = useState(1);
@@ -158,7 +162,7 @@ export default function StockOnHandScreen() {
           warehouseId,
           categoryId,
           branchId,
-          inStock,
+          lowStock,
         });
         if (id !== requestId.current) return;
         setItems((prev) =>
@@ -180,7 +184,7 @@ export default function StockOnHandScreen() {
       } catch (e) {
         if (id === requestId.current && !append) {
           setError(
-            e instanceof Error ? e.message : "Failed to load stock on hand.",
+            e instanceof Error ? e.message : t("soh.loadError"),
           );
           setItems([]);
         }
@@ -191,7 +195,7 @@ export default function StockOnHandScreen() {
         }
       }
     },
-    [warehouseId, categoryId, branchId, inStock],
+    [warehouseId, categoryId, branchId, lowStock, t],
   );
 
   // Initial load + debounced search; reloads on filter changes.
@@ -218,8 +222,8 @@ export default function StockOnHandScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="Stock on Hand"
-        subtitle={`${total} ${total === 1 ? "item" : "items"}`}
+        title={t("settings.row.stockOnHand")}
+        subtitle={`${total} ${total === 1 ? t("common.item") : t("common.items")}`}
         onBack={() => router.back()}
       />
 
@@ -286,7 +290,7 @@ export default function StockOnHandScreen() {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Search item"
+              placeholder={t("filters.searchItem")}
               placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -304,27 +308,27 @@ export default function StockOnHandScreen() {
           </ThemedView>
 
           <Pressable
-            onPress={() => setInStock((v) => !v)}
+            onPress={() => setLowStock((v) => !v)}
             style={({ pressed }) => [
               styles.toggle,
-              { backgroundColor: inStock ? BRAND : theme.backgroundElement },
+              { backgroundColor: lowStock ? LOW : theme.backgroundElement },
               pressed && styles.pressed,
             ]}
           >
             <Ionicons
-              name={inStock ? "checkmark-circle" : "ellipse-outline"}
+              name={lowStock ? "alert-circle" : "alert-circle-outline"}
               size={16}
-              color={inStock ? "#ffffff" : theme.textSecondary}
+              color={lowStock ? "#ffffff" : theme.textSecondary}
             />
             <ThemedText
               type="small"
               style={
-                inStock
+                lowStock
                   ? styles.toggleActiveText
                   : { color: theme.textSecondary }
               }
             >
-              In stock
+              Low stock
             </ThemedText>
           </Pressable>
         </View>
@@ -354,7 +358,14 @@ export default function StockOnHandScreen() {
         //     </View>
         //   ) : null
         // }
-        renderItem={({ item }) => <ItemCard item={item} theme={theme} />}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => setSelectedItem(item)}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <ItemCard item={item} theme={theme} />
+          </Pressable>
+        )}
         ListEmptyComponent={
           loading ? (
             <SkeletonList />
@@ -364,7 +375,7 @@ export default function StockOnHandScreen() {
               themeColor="textSecondary"
               style={styles.empty}
             >
-              {error ?? "No items found."}
+              {error ?? t("common.noItemsFound")}
             </ThemedText>
           )
         }
@@ -379,7 +390,7 @@ export default function StockOnHandScreen() {
 
       <OptionSheet
         visible={warehouseSheet}
-        title="Select warehouse"
+        title={t("filters.selectWarehouse")}
         options={[ALL_WAREHOUSES, ...warehouseOptions.map((o) => o.name)]}
         selected={warehouse?.name ?? ALL_WAREHOUSES}
         onSelect={(value) => {
@@ -395,7 +406,7 @@ export default function StockOnHandScreen() {
 
       <OptionSheet
         visible={categorySheet}
-        title="Select category"
+        title={t("filters.selectCategory")}
         options={[ALL_CATEGORIES, ...categoryOptions.map((o) => o.name)]}
         selected={category?.name ?? ALL_CATEGORIES}
         onSelect={(value) => {
@@ -407,6 +418,13 @@ export default function StockOnHandScreen() {
           setCategorySheet(false);
         }}
         onClose={() => setCategorySheet(false)}
+      />
+
+      <ItemStockSheet
+        item={selectedItem}
+        warehouses={warehouseOptions}
+        branchId={branchId}
+        onClose={() => setSelectedItem(null)}
       />
 
       <ListLoadingOverlay visible={loading && items.length > 0} />
@@ -422,7 +440,10 @@ function ItemCard({
   theme: ReturnType<typeof useTheme>;
 }) {
   const out = item.qty <= 0;
-  const qtyColor = out ? "#e5484d" : "#30A46C";
+  const low =
+    !out &&
+    (item.isLowStock || (item.reorderLevel > 0 && item.qty <= item.reorderLevel));
+  const qtyColor = out ? "#e5484d" : low ? LOW : "#30A46C";
 
   return (
     <ThemedView type="backgroundElement" style={styles.card}>

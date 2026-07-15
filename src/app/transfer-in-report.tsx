@@ -25,6 +25,7 @@ import { ThemedView } from '@/components/themed-view';
 import type { Branch } from '@/constants/branches';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { formatDate } from '@/data/purchase-orders';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -44,6 +45,7 @@ export default function TransferInReportScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const [branch, setBranch] = useState<Branch | null>(session?.branch ?? null);
   const [branchSheet, setBranchSheet] = useState(false);
@@ -86,13 +88,13 @@ export default function TransferInReportScreen() {
         // by default is more useful than making the user open each category.
         setExpanded(q ? new Set(report.categories.map((c) => c.categoryId)) : new Set());
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load report.');
+        setError(e instanceof Error ? e.message : t('common.loadReportError'));
         setCategories([]);
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [t],
   );
 
   function toggleCategory(id: string) {
@@ -131,21 +133,21 @@ export default function TransferInReportScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="Transfer In Report"
-        subtitle={`${categoryCount} ${categoryCount === 1 ? 'category' : 'categories'} · ${itemCount} ${itemCount === 1 ? 'item' : 'items'} · ${withThousands(totalQty)} qty`}
+        title={t('settings.row.transferInReport')}
+        subtitle={`${categoryCount} ${categoryCount === 1 ? t('common.category') : t('common.categories')} · ${itemCount} ${itemCount === 1 ? t('common.item') : t('common.items')} · ${withThousands(totalQty)} ${t('common.qty')}`}
         onBack={() => router.back()}
       />
 
       <View style={styles.filters}>
         <View style={styles.dateRow}>
           <DateField
-            label="From"
+            label={t('filters.from')}
             value={formatDate(dateFrom.toISOString())}
             onPress={() => openDatePicker('from')}
             theme={theme}
           />
           <DateField
-            label="To"
+            label={t('filters.to')}
             value={formatDate(dateTo.toISOString())}
             onPress={() => openDatePicker('to')}
             theme={theme}
@@ -156,7 +158,7 @@ export default function TransferInReportScreen() {
           <ThemedView type="backgroundElement" style={styles.selectBox}>
             <Ionicons name="business-outline" size={18} color={theme.textSecondary} />
             <ThemedText numberOfLines={1} style={[styles.selectValue, { color: theme.text }]}>
-              {branch?.name ?? 'All branches'}
+              {branch?.name ?? t('filters.allBranches')}
             </ThemedText>
             <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
           </ThemedView>
@@ -167,7 +169,7 @@ export default function TransferInReportScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search item"
+            placeholder={t('filters.searchItem')}
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -201,11 +203,11 @@ export default function TransferInReportScreen() {
                 <View style={styles.datePickerHeader}>
                   <Pressable onPress={() => setDatePicker(null)} hitSlop={Spacing.two}>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Cancel
+                      {t('common.cancel')}
                     </ThemedText>
                   </Pressable>
                   <ThemedText type="smallBold">
-                    {datePicker === 'from' ? 'Date From' : 'Date To'}
+                    {datePicker === 'from' ? t('filters.dateFrom') : t('filters.dateTo')}
                   </ThemedText>
                   <Pressable
                     onPress={() => {
@@ -215,7 +217,7 @@ export default function TransferInReportScreen() {
                     }}
                     hitSlop={Spacing.two}>
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Done
+                      {t('common.done')}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -270,7 +272,7 @@ export default function TransferInReportScreen() {
             <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No incoming transfers for this period.'}
+              {error ?? t('transferIn.empty')}
             </ThemedText>
           )
         }
@@ -314,16 +316,17 @@ function CategorySection({
   onToggle: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={styles.categorySection}>
       <Pressable onPress={onToggle} style={({ pressed }) => pressed && styles.pressed}>
         <ThemedView type="backgroundElement" style={styles.categoryHeader}>
           <View style={styles.cardMain}>
             <ThemedText type="smallBold" numberOfLines={1}>
-              {category.categoryName || 'Uncategorized'}
+              {category.categoryName || t('common.uncategorized')}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {category.itemCount} {category.itemCount === 1 ? 'item' : 'items'}
+              {category.itemCount} {category.itemCount === 1 ? t('common.item') : t('common.items')}
             </ThemedText>
           </View>
           <View style={styles.qtyWrap}>
@@ -331,7 +334,7 @@ function CategorySection({
               {withThousands(category.totalQty)}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Qty in
+              {t('common.qtyIn')}
             </ThemedText>
           </View>
           <Ionicons
@@ -355,6 +358,7 @@ function CategorySection({
 }
 
 function ItemCard({ item, theme }: { item: TransferInItem; theme: ReturnType<typeof useTheme> }) {
+  const { t } = useTranslation();
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
       <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
@@ -372,7 +376,7 @@ function ItemCard({ item, theme }: { item: TransferInItem; theme: ReturnType<typ
           {item.itemCode}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          {item.transferCount} {item.transferCount === 1 ? 'transfer' : 'transfers'}
+          {item.transferCount} {item.transferCount === 1 ? t('common.transfer') : t('common.transfers')}
         </ThemedText>
       </View>
       <View style={styles.qtyWrap}>
@@ -380,7 +384,7 @@ function ItemCard({ item, theme }: { item: TransferInItem; theme: ReturnType<typ
           {withThousands(item.qty)}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          Qty in
+          {t('common.qtyIn')}
         </ThemedText>
       </View>
     </ThemedView>

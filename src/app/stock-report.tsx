@@ -32,6 +32,7 @@ import {
 } from '@/data/purchase-orders';
 import { STATUS_META as TRANSFER_STATUS, type StockTransfer } from '@/data/transfers';
 import { SkeletonList, SkeletonStatGrid } from '@/components/skeleton';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -51,6 +52,7 @@ export default function StockReportScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branchId = session?.branch.id;
 
   const [dateFrom, setDateFrom] = useState(() => {
@@ -86,12 +88,12 @@ export default function StockReportScreen() {
         setPurchases({ items: po.items, total: po.total, page: po.page, lastPage: po.totalPages });
         setTransfers({ items: tr.items, total: tr.total, page: tr.page, lastPage: tr.totalPages });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load report.');
+        setError(e instanceof Error ? e.message : t('common.loadReportError'));
       } finally {
         setLoading(false);
       }
     },
-    [branchId],
+    [branchId, t],
   );
 
   useEffect(() => {
@@ -162,11 +164,11 @@ export default function StockReportScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScreenHeader title="Stock Report" subtitle="Movement by period" onBack={() => router.back()} />
+      <ScreenHeader title={t('settings.row.stockReport')} subtitle={t('stockReport.subtitle')} onBack={() => router.back()} />
 
       <View style={styles.dateRow}>
-        <DateField label="From" value={formatDate(dateFrom.toISOString())} onPress={() => openDatePicker('from')} theme={theme} />
-        <DateField label="To" value={formatDate(dateTo.toISOString())} onPress={() => openDatePicker('to')} theme={theme} />
+        <DateField label={t('filters.from')} value={formatDate(dateFrom.toISOString())} onPress={() => openDatePicker('from')} theme={theme} />
+        <DateField label={t('filters.to')} value={formatDate(dateTo.toISOString())} onPress={() => openDatePicker('to')} theme={theme} />
       </View>
 
       {datePicker && Platform.OS === 'android' && (
@@ -185,10 +187,10 @@ export default function StockReportScreen() {
                 <View style={styles.datePickerHeader}>
                   <Pressable onPress={() => setDatePicker(null)} hitSlop={Spacing.two}>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Cancel
+                      {t('common.cancel')}
                     </ThemedText>
                   </Pressable>
-                  <ThemedText type="smallBold">{datePicker === 'from' ? 'Date From' : 'Date To'}</ThemedText>
+                  <ThemedText type="smallBold">{datePicker === 'from' ? t('filters.dateFrom') : t('filters.dateTo')}</ThemedText>
                   <Pressable
                     onPress={() => {
                       if (datePicker === 'from') setDateFrom(tempDate);
@@ -197,7 +199,7 @@ export default function StockReportScreen() {
                     }}
                     hitSlop={Spacing.two}>
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Done
+                      {t('common.done')}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -232,16 +234,16 @@ export default function StockReportScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textSecondary} colors={[theme.tint]} />
           }>
-          <SectionTitle title="Stock Movement" />
+          <SectionTitle title={t('stockReport.movement')} />
           {movements.length === 0 ? (
-            <EmptyCard text="No movement for this period." />
+            <EmptyCard text={t('stockReport.emptyMovement')} />
           ) : (
             movements.map((m) => <MovementCard key={m.warehouseId} m={m} theme={theme} />)
           )}
 
-          <SectionTitle title="Purchases" badge={`${purchases.total}`} />
+          <SectionTitle title={t('stockReport.purchases')} badge={`${purchases.total}`} />
           {purchases.items.length === 0 ? (
-            <EmptyCard text="No purchases in this period." />
+            <EmptyCard text={t('stockReport.emptyPurchases')} />
           ) : (
             <ThemedView type="backgroundElement" style={styles.card}>
               {purchases.items.map((po, i) => (
@@ -253,9 +255,9 @@ export default function StockReportScreen() {
             <ShowMore loading={morePO} onPress={loadMorePurchases} theme={theme} />
           )}
 
-          <SectionTitle title="Stock Transfers" badge={`${transfers.total}`} />
+          <SectionTitle title={t('stockReport.transfers')} badge={`${transfers.total}`} />
           {transfers.items.length === 0 ? (
-            <EmptyCard text="No transfers in this period." />
+            <EmptyCard text={t('stockReport.emptyTransfers')} />
           ) : (
             <ThemedView type="backgroundElement" style={styles.card}>
               {transfers.items.map((t, i) => (
@@ -314,6 +316,7 @@ function SectionTitle({ title, badge }: { title: string; badge?: string }) {
 }
 
 function MovementCard({ m, theme }: { m: WarehouseMovement; theme: ReturnType<typeof useTheme> }) {
+  const { t } = useTranslation();
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
       <View style={styles.movementHead}>
@@ -335,12 +338,12 @@ function MovementCard({ m, theme }: { m: WarehouseMovement; theme: ReturnType<ty
         </View>
       </View>
       <View style={[styles.movementBody, { borderTopColor: theme.background }]}>
-        <MoveRow label="Opening" qty={m.openingQty} amount={m.openingAmount} theme={theme} />
-        <MoveRow label="Purchase" qty={m.purchaseQty} amount={m.purchaseAmount} kind="in" theme={theme} />
-        <MoveRow label="Received" qty={m.receivedQty} amount={m.receivedAmount} kind="in" theme={theme} />
-        <MoveRow label="Sale" qty={m.saleQty} amount={m.saleAmount} kind="out" theme={theme} />
-        <MoveRow label="Transfer" qty={m.transferQty} amount={m.transferAmount} signed theme={theme} />
-        <MoveRow label="Adjustment" qty={m.adjustmentQty} amount={m.adjustmentAmount} signed theme={theme} />
+        <MoveRow label={t('stockReport.row.opening')} qty={m.openingQty} amount={m.openingAmount} theme={theme} />
+        <MoveRow label={t('stockReport.row.purchase')} qty={m.purchaseQty} amount={m.purchaseAmount} kind="in" theme={theme} />
+        <MoveRow label={t('stockReport.row.received')} qty={m.receivedQty} amount={m.receivedAmount} kind="in" theme={theme} />
+        <MoveRow label={t('stockReport.row.sale')} qty={m.saleQty} amount={m.saleAmount} kind="out" theme={theme} />
+        <MoveRow label={t('stockReport.row.transfer')} qty={m.transferQty} amount={m.transferAmount} signed theme={theme} />
+        <MoveRow label={t('stockReport.row.adjustment')} qty={m.adjustmentQty} amount={m.adjustmentAmount} signed theme={theme} />
       </View>
     </ThemedView>
   );

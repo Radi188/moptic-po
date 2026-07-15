@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMoney, stockLevel, STOCK_META, type InventoryProduct } from '@/data/inventory';
 
@@ -22,13 +23,18 @@ type Props = {
 export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   function confirmDelete() {
     if (!product) return;
-    Alert.alert('Delete product', `Delete "${product.name}"? This can't be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => onDelete(product.id) },
-    ]);
+    Alert.alert(
+      t('productDetails.deleteTitle'),
+      t('productDetails.deleteConfirm', { name: product.name }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => onDelete(product.id) },
+      ],
+    );
   }
 
   const level = product ? stockLevel(product) : 'in';
@@ -65,7 +71,7 @@ export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Prop
                 <View style={[styles.chip, { backgroundColor: `${levelMeta.color}1A` }]}>
                   <View style={[styles.dot, { backgroundColor: levelMeta.color }]} />
                   <ThemedText type="small" style={{ color: levelMeta.color, fontWeight: '700' }}>
-                    {levelMeta.label}
+                    {t(`stocklevel.${level}`)}
                   </ThemedText>
                 </View>
                 {!!product.category && (
@@ -78,7 +84,7 @@ export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Prop
                 )}
                 <View style={[styles.chip, { backgroundColor: theme.backgroundElement }]}>
                   <ThemedText type="small" themeColor="textSecondary">
-                    {product.status === 'active' ? 'Active' : 'Inactive'}
+                    {product.status === 'active' ? t('common.active') : t('common.inactive')}
                   </ThemedText>
                 </View>
               </View>
@@ -89,24 +95,24 @@ export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Prop
                 contentContainerStyle={styles.scrollBody}>
                 <View style={styles.stats}>
                   <StatTile
-                    label="On hand"
+                    label={t('productDetails.onHand')}
                     value={`${product.stock}`}
-                    hint={`Reorder at ${product.reorderLevel}`}
+                    hint={t('productDetails.reorderAt', { level: product.reorderLevel })}
                     accent={levelMeta.color}
                     theme={theme}
                   />
-                  <StatTile label="Sell price" value={formatMoney(product.price)} theme={theme} />
-                  <StatTile label="Cost" value={formatMoney(product.cost)} theme={theme} />
+                  <StatTile label={t('productDetails.sellPrice')} value={formatMoney(product.price)} theme={theme} />
+                  <StatTile label={t('productDetails.cost')} value={formatMoney(product.cost)} theme={theme} />
                 </View>
 
                 <ThemedView type="backgroundElement" style={styles.card}>
-                  <DetailRow label="Brand" value={product.brand || '—'} theme={theme} />
-                  <DetailRow label="Stock type" value={product.stockType || '—'} theme={theme} />
+                  <DetailRow label={t('productDetails.brand')} value={product.brand || '—'} theme={theme} />
+                  <DetailRow label={t('productDetails.stockType')} value={product.stockType || '—'} theme={theme} />
                   {!!product.barcode && (
-                    <DetailRow label="Barcode" value={product.barcode} theme={theme} />
+                    <DetailRow label={t('productDetails.barcode')} value={product.barcode} theme={theme} />
                   )}
                   <DetailRow
-                    label="Description"
+                    label={t('productDetails.description')}
                     value={product.description || '—'}
                     theme={theme}
                     last
@@ -119,13 +125,13 @@ export function ProductDetailsSheet({ product, onClose, onEdit, onDelete }: Prop
                   onPress={confirmDelete}
                   style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}>
                   <Ionicons name="trash-outline" size={18} color={DANGER} />
-                  <ThemedText style={[styles.deleteText, { color: DANGER }]}>Delete</ThemedText>
+                  <ThemedText style={[styles.deleteText, { color: DANGER }]}>{t('common.delete')}</ThemedText>
                 </Pressable>
                 <Pressable
                   onPress={() => onEdit(product)}
                   style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
                   <Ionicons name="create-outline" size={18} color="#ffffff" />
-                  <ThemedText style={styles.editText}>Edit</ThemedText>
+                  <ThemedText style={styles.editText}>{t('common.edit')}</ThemedText>
                 </Pressable>
               </View>
             </>

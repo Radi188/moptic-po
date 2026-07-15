@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/status-badge';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import {
   canEditOrder,
@@ -26,12 +27,22 @@ type Props = {
   loading?: boolean;
   order: PurchaseOrder | null;
   onClose: () => void;
-  onEdit: (id: string) => void;
+  onEdit?: (id: string) => void;
+  /** When provided and the order is pending, shows a "Create Invoice" action. */
+  onCreateInvoice?: (order: PurchaseOrder) => void;
 };
 
-export function PurchaseOrderDetailsSheet({ visible, loading, order, onClose, onEdit }: Props) {
+export function PurchaseOrderDetailsSheet({
+  visible,
+  loading,
+  order,
+  onClose,
+  onEdit,
+  onCreateInvoice,
+}: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -50,7 +61,7 @@ export function PurchaseOrderDetailsSheet({ visible, loading, order, onClose, on
             <>
               <View style={styles.titleRow}>
                 <ThemedText type="subtitle" style={styles.title}>
-                  Purchase Order Details
+                  {t('poDetails.title')}
                 </ThemedText>
                 {order.status && <StatusBadge status={order.status} />}
               </View>
@@ -65,7 +76,7 @@ export function PurchaseOrderDetailsSheet({ visible, loading, order, onClose, on
               <ScrollView style={styles.list} bounces={false} showsVerticalScrollIndicator={false}>
                 {order.items.length === 0 ? (
                   <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-                    No items in this order.
+                    {t('poDetails.noItems')}
                   </ThemedText>
                 ) : (
                   order.items.map((item, index) => (
@@ -75,28 +86,65 @@ export function PurchaseOrderDetailsSheet({ visible, loading, order, onClose, on
               </ScrollView>
 
               <ThemedView type="backgroundElement" style={styles.summary}>
-                <SummaryRow label="Amount" value={formatMoney(order.amount)} />
-                <SummaryRow label="Discount" value={formatMoney(order.discountAmount)} />
-                <SummaryRow label="Total" value={formatMoney(order.totalAmount)} accent />
+                <SummaryRow label={t('poDetails.amount')} value={formatMoney(order.amount)} />
+                <SummaryRow label={t('poDetails.discount')} value={formatMoney(order.discountAmount)} />
+                <SummaryRow label={t('poDetails.total')} value={formatMoney(order.totalAmount)} accent />
               </ThemedView>
 
-              {canEditOrder(order.status) ? (
-                <Pressable
-                  onPress={() => onEdit(order.id)}
-                  style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}>
-                  <Ionicons name="create-outline" size={18} color="#ffffff" />
-                  <ThemedText style={styles.editButtonText}>Edit order</ThemedText>
-                </Pressable>
-              ) : order.status ? (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-                  This order is {order.status} and can&apos;t be edited.
-                </ThemedText>
-              ) : null}
+              <ActionFooter order={order} onEdit={onEdit} onCreateInvoice={onCreateInvoice} />
             </>
           ) : null}
         </ThemedView>
       </View>
     </Modal>
+  );
+}
+
+/**
+ * Footer actions for the detail sheet. Shows Create Invoice (pending only) and
+ * Edit side-by-side in a single row; a lone action fills the row, and when
+ * neither applies it falls back to the status note.
+ */
+function ActionFooter({
+  order,
+  onEdit,
+  onCreateInvoice,
+}: {
+  order: PurchaseOrder;
+  onEdit?: (id: string) => void;
+  onCreateInvoice?: (order: PurchaseOrder) => void;
+}) {
+  const { t } = useTranslation();
+  const showInvoice = order.status === 'pending' && !!onCreateInvoice;
+  const showEdit = canEditOrder(order.status) && !!onEdit;
+
+  if (!showInvoice && !showEdit) {
+    return order.status ? (
+      <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
+        {t('poDetails.statusNote', { status: t(`postatus.${order.status}`) })}
+      </ThemedText>
+    ) : null;
+  }
+
+  return (
+    <View style={styles.actionRow}>
+      {showInvoice && (
+        <Pressable
+          onPress={() => onCreateInvoice!(order)}
+          style={({ pressed }) => [styles.actionButton, styles.invoiceButton, pressed && styles.pressed]}>
+          <Ionicons name="receipt-outline" size={18} color="#ffffff" />
+          <ThemedText style={styles.editButtonText}>{t('poDetails.createInvoice')}</ThemedText>
+        </Pressable>
+      )}
+      {showEdit && (
+        <Pressable
+          onPress={() => onEdit!(order.id)}
+          style={({ pressed }) => [styles.actionButton, styles.editButton, pressed && styles.pressed]}>
+          <Ionicons name="create-outline" size={18} color="#ffffff" />
+          <ThemedText style={styles.editButtonText}>{t('poDetails.editOrder')}</ThemedText>
+        </Pressable>
+      )}
+    </View>
   );
 }
 
@@ -186,7 +234,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    lineHeight: 26,
+    // Taller than the font so tall Khmer glyphs aren't clipped at the top.
+    lineHeight: 30,
     flexShrink: 1,
   },
   metaRow: {
@@ -231,6 +280,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  actionButton: {
+    flex: 1,
+  },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -239,6 +295,15 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: Spacing.three,
     backgroundColor: BRAND,
+  },
+  invoiceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    height: 52,
+    borderRadius: Spacing.three,
+    backgroundColor: '#3E63DD',
   },
   editButtonText: {
     color: '#ffffff',

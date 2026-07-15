@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -30,6 +31,7 @@ function getInitials(name: string) {
 
 export function QuickLoginModal() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { quickLoginRequired, session, quickSignIn, signOut } = useAuth();
 
   const [name, setName] = useState('');
@@ -57,7 +59,7 @@ export function QuickLoginModal() {
     try {
       await quickSignIn(name, password);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to sign in.');
+      setError(e instanceof Error ? e.message : t('login.errorGeneric'));
     } finally {
       setSubmitting(false);
     }
@@ -76,10 +78,10 @@ export function QuickLoginModal() {
           </View>
 
           <ThemedText type="subtitle" style={styles.title}>
-            Session expired
+            {t('quickLogin.title')}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" style={styles.subtitle}>
-            Signed in as {session?.username ?? ''}. Please sign in again to continue.
+            {t('quickLogin.subtitle', { name: session?.username ?? '' })}
           </ThemedText>
 
           <ThemedView type="backgroundElement" style={styles.field}>
@@ -87,7 +89,7 @@ export function QuickLoginModal() {
             <TextInput
               value={name}
               onChangeText={setName}
-              placeholder="Name"
+              placeholder={t('quickLogin.name')}
               placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -100,7 +102,7 @@ export function QuickLoginModal() {
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="Password"
+              placeholder={t('login.password')}
               placeholderTextColor={theme.textSecondary}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
@@ -134,13 +136,13 @@ export function QuickLoginModal() {
             {submitting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <ThemedText style={styles.buttonText}>Sign in</ThemedText>
+              <ThemedText style={styles.buttonText}>{t('login.signIn')}</ThemedText>
             )}
           </Pressable>
 
           <Pressable onPress={() => signOut()} hitSlop={Spacing.two} style={styles.signOut}>
             <ThemedText type="small" themeColor="textSecondary">
-              Sign out instead
+              {t('quickLogin.signOutInstead')}
             </ThemedText>
           </Pressable>
         </ThemedView>
@@ -181,7 +183,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    lineHeight: 28,
+    // Taller than the font so tall Khmer glyphs aren't clipped at the top.
+    lineHeight: 34,
     textAlign: 'center',
   },
   subtitle: {

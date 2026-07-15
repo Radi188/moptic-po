@@ -16,6 +16,7 @@ import { fetchItems, searchItems, type ApiItem } from '@/api/items';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { formatMoney } from '@/data/purchase-orders';
 import { SkeletonRows } from '@/components/skeleton';
 import { useTheme } from '@/hooks/use-theme';
@@ -31,6 +32,7 @@ type Props = {
 export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<ApiItem[]>([]);
@@ -89,11 +91,11 @@ export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Prop
           <ThemedView style={styles.handle} type="backgroundSelected" />
           <View style={styles.titleRow}>
             <ThemedText type="subtitle" style={styles.title}>
-              Choose Items
+              {t('itemPicker.title')}
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={Spacing.two}>
               <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                Done
+                {t('common.done')}
               </ThemedText>
             </Pressable>
           </View>
@@ -103,7 +105,7 @@ export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Prop
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Search item code or name"
+              placeholder={t('itemPicker.searchPlaceholder')}
               placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -136,7 +138,7 @@ export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Prop
               )}
               ListEmptyComponent={
                 <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-                  No items found.
+                  {t('itemPicker.empty')}
                 </ThemedText>
               }
               ListFooterComponent={

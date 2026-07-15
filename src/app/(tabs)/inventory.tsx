@@ -20,6 +20,7 @@ import { SkeletonList } from "@/components/skeleton";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
+import { useTranslation } from "@/contexts/i18n";
 import {
   deleteProduct,
   formatMoney,
@@ -34,6 +35,8 @@ export default function InventoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { t, language } = useTranslation();
+  const km = language === "km";
   const { isTablet } = useResponsive();
 
   const [search, setSearch] = useState("");
@@ -71,7 +74,7 @@ export default function InventoryScreen() {
       } catch (e) {
         if (id === requestId.current && !append) {
           setError(
-            e instanceof Error ? e.message : "Failed to load inventory.",
+            e instanceof Error ? e.message : t("inventory.loadError"),
           );
           setItems([]);
         }
@@ -82,7 +85,7 @@ export default function InventoryScreen() {
         }
       }
     },
-    [],
+    [t],
   );
 
   // Initial load + debounced search; reloads when the active branch changes.
@@ -140,11 +143,16 @@ export default function InventoryScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View>
-          <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>
-            Inventory
+          <ThemedText
+            style={[
+              styles.title,
+              isTablet && styles.titleTablet,
+              km && (isTablet ? styles.titleTabletKm : styles.titleKm),
+            ]}>
+            {t("inventory.title")}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {total} products
+            {t("inventory.productCount", { count: total })}
           </ThemedText>
         </View>
         <Pressable
@@ -152,7 +160,7 @@ export default function InventoryScreen() {
           style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}
         >
           <Ionicons name="add" size={20} color="#ffffff" />
-          <ThemedText style={styles.newButtonText}>New</ThemedText>
+          <ThemedText style={styles.newButtonText}>{t("inventory.new")}</ThemedText>
         </Pressable>
       </View>
 
@@ -162,7 +170,7 @@ export default function InventoryScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search code or name"
+            placeholder={t("inventory.searchPlaceholder")}
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -216,7 +224,7 @@ export default function InventoryScreen() {
               themeColor="textSecondary"
               style={styles.empty}
             >
-              {error ?? "No products found."}
+              {error ?? t("inventory.empty")}
             </ThemedText>
           )
         }
@@ -333,6 +341,13 @@ const styles = StyleSheet.create({
   titleTablet: {
     fontSize: 32,
     lineHeight: 40,
+  },
+  // Khmer titles need more line height so tall stacked glyphs don't clip.
+  titleKm: {
+    lineHeight: 42,
+  },
+  titleTabletKm: {
+    lineHeight: 50,
   },
   newButton: {
     flexDirection: "row",

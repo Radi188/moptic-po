@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -23,15 +24,16 @@ function getInitials(name: string) {
 }
 
 type Props = {
-  onPressNotifications?: () => void;
   onPressAvatar?: () => void;
 };
 
-export function HomeHeader({ onPressNotifications, onPressAvatar }: Props) {
+export function HomeHeader({ onPressAvatar }: Props) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { isTablet } = useResponsive();
   const { session, switchBranch } = useAuth();
+  const { t, language, setLanguage } = useTranslation();
+  const km = language === 'km';
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
 
   return (
@@ -47,14 +49,21 @@ export function HomeHeader({ onPressNotifications, onPressAvatar }: Props) {
       />
 
       <View style={styles.left}>
-        <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Stock Control</ThemedText>
+        <ThemedText
+          style={[
+            styles.title,
+            isTablet && styles.titleTablet,
+            km && (isTablet ? styles.titleTabletKm : styles.titleKm),
+          ]}>
+          {t('header.stockControl')}
+        </ThemedText>
         <Pressable
           onPress={() => setBranchPickerOpen(true)}
-          accessibilityLabel="Switch branch"
+          accessibilityLabel={t('header.switchBranch')}
           style={({ pressed }) => [styles.branchRow, pressed && styles.pressed]}>
           <Ionicons name="business-outline" size={14} color={theme.textSecondary} />
           <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-            {session?.branch.name ?? 'No branch selected'}
+            {session?.branch.name ?? t('header.noBranchSelected')}
           </ThemedText>
           <Ionicons name="chevron-down" size={14} color={theme.textSecondary} />
         </Pressable>
@@ -62,19 +71,19 @@ export function HomeHeader({ onPressNotifications, onPressAvatar }: Props) {
 
       <View style={styles.right}>
         <Pressable
-          onPress={onPressNotifications}
+          onPress={() => setLanguage(km ? 'en' : 'km')}
           hitSlop={Spacing.two}
-          accessibilityLabel="Notifications"
+          accessibilityLabel={t('settings.row.language')}
+          accessibilityRole="button"
           style={({ pressed }) => pressed && styles.pressed}>
           <ThemedView type="backgroundElement" style={styles.iconButton}>
-            <Ionicons name="notifications-outline" size={22} color={theme.text} />
-            <View style={[styles.badge, { borderColor: theme.backgroundElement }]} />
+            <ThemedText style={styles.flag}>{km ? '🇰🇭' : '🇬🇧'}</ThemedText>
           </ThemedView>
         </Pressable>
 
         <Pressable
           onPress={onPressAvatar}
-          accessibilityLabel="Account"
+          accessibilityLabel={t('header.account')}
           style={({ pressed }) => pressed && styles.pressed}>
           <View style={styles.avatar}>
             <ThemedText style={styles.avatarText}>
@@ -111,6 +120,13 @@ const styles = StyleSheet.create({
     fontSize: 32,
     lineHeight: 40,
   },
+  // Khmer titles need more line height so tall stacked glyphs don't clip.
+  titleKm: {
+    lineHeight: 42,
+  },
+  titleTabletKm: {
+    lineHeight: 50,
+  },
   branchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -128,15 +144,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badge: {
-    position: 'absolute',
-    top: 11,
-    right: 11,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#e5484d',
-    borderWidth: 1.5,
+  flag: {
+    fontSize: 24,
+    lineHeight: 30,
   },
   avatar: {
     width: AVATAR_SIZE,

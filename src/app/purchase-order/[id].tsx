@@ -31,6 +31,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import {
   addPurchaseOrder,
@@ -64,6 +65,7 @@ export default function PurchaseOrderFormScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const isNew = id === 'new';
   const existing = useMemo(() => (isNew ? undefined : getPurchaseOrder(id)), [id, isNew]);
@@ -108,9 +110,9 @@ export default function PurchaseOrderFormScreen() {
   if (!isNew && !existing) {
     return (
       <ThemedView style={styles.container}>
-        <ScreenHeader title="Not found" onBack={() => router.back()} />
+        <ScreenHeader title={t('common.notFound')} onBack={() => router.back()} />
         <View style={styles.centered}>
-          <ThemedText themeColor="textSecondary">This order no longer exists.</ThemedText>
+          <ThemedText themeColor="textSecondary">{t('poForm.notFoundBody')}</ThemedText>
         </View>
       </ThemedView>
     );
@@ -160,15 +162,15 @@ export default function PurchaseOrderFormScreen() {
   async function handleSave() {
     if (submitting) return;
     if (!vendor) {
-      setError('Please select a vendor.');
+      setError(t('poForm.selectVendor'));
       return;
     }
     if (!warehouse) {
-      setError('Please select a warehouse.');
+      setError(t('adjustment.selectWarehouseErr'));
       return;
     }
     if (items.length === 0) {
-      setError('Add at least one item.');
+      setError(t('transferForm.addItem'));
       return;
     }
 
@@ -220,7 +222,7 @@ export default function PurchaseOrderFormScreen() {
       await createPurchaseOrder(body);
       router.back();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create purchase order.');
+      setError(e instanceof Error ? e.message : t('poForm.createError'));
     } finally {
       setSubmitting(false);
     }
@@ -232,22 +234,22 @@ export default function PurchaseOrderFormScreen() {
       <ThemedView style={styles.container}>
         <ScreenHeader
           title={existing.reference}
-          subtitle="View only"
+          subtitle={t('common.viewOnly')}
           right={existing.status ? <StatusBadge status={existing.status} /> : undefined}
           onBack={() => router.back()}
         />
         <ScrollView contentContainerStyle={styles.body}>
           <ThemedText type="small" themeColor="textSecondary">
-            This order is {existing.status} and can&apos;t be edited.
+            {existing.status ? t('poDetails.statusNote', { status: t(`postatus.${existing.status}`) }) : ''}
           </ThemedText>
           <ThemedView type="backgroundElement" style={styles.readonlyCard}>
-            <DetailRow label="Reference" value={existing.reference} />
-            <DetailRow label="Transaction Date" value={formatDateTime(existing.transactionDate)} />
-            <DetailRow label="Vendor" value={existing.vendor} />
-            <DetailRow label="Warehouse" value={existing.warehouse} />
-            <DetailRow label="Amount" value={formatMoney(existing.amount)} />
-            <DetailRow label="Discount" value={formatMoney(existing.discountAmount)} />
-            <DetailRow label="Total" value={formatMoney(existing.totalAmount)} accent last />
+            <DetailRow label={t('field.reference')} value={existing.reference} />
+            <DetailRow label={t('field.transactionDate')} value={formatDateTime(existing.transactionDate)} />
+            <DetailRow label={t('field.vendor')} value={existing.vendor} />
+            <DetailRow label={t('filters.warehouse')} value={existing.warehouse} />
+            <DetailRow label={t('poDetails.amount')} value={formatMoney(existing.amount)} />
+            <DetailRow label={t('poDetails.discount')} value={formatMoney(existing.discountAmount)} />
+            <DetailRow label={t('poDetails.total')} value={formatMoney(existing.totalAmount)} accent last />
           </ThemedView>
         </ScrollView>
       </ThemedView>
@@ -257,8 +259,8 @@ export default function PurchaseOrderFormScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={isNew ? 'Purchasing' : existing!.reference}
-        subtitle={isNew ? 'New purchase order' : 'Edit order'}
+        title={isNew ? t('poForm.viewTitle') : existing!.reference}
+        subtitle={isNew ? t('poForm.newTitle') : t('poForm.editTitle')}
         right={!isNew && existing?.status ? <StatusBadge status={existing.status} /> : undefined}
         onBack={() => router.back()}
       />
@@ -267,7 +269,7 @@ export default function PurchaseOrderFormScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <SelectField
-            label="Transaction Date"
+            label={t('field.transactionDate')}
             value={formatDate(date.toISOString())}
             icon="calendar-outline"
             onPress={() => setShowDate(true)}
@@ -278,28 +280,28 @@ export default function PurchaseOrderFormScreen() {
           )}
 
           <SelectField
-            label="Vendor"
+            label={t('field.vendor')}
             value={vendor}
-            placeholder="Please select vendor"
+            placeholder={t('poForm.selectVendorPlaceholder')}
             icon="storefront-outline"
             onPress={() => setVendorSheet(true)}
             theme={theme}
           />
 
           <SelectField
-            label="Warehouse"
+            label={t('filters.warehouse')}
             value={warehouse}
-            placeholder="Please select warehouse"
+            placeholder={t('adjustment.selectWarehousePlaceholder')}
             icon="business-outline"
             onPress={() => setWarehouseSheet(true)}
             theme={theme}
           />
 
           <View style={styles.amountRow}>
-            <ReadOnlyField label="Amount" value={formatMoney(amount)} style={styles.amountCol} />
+            <ReadOnlyField label={t('poDetails.amount')} value={formatMoney(amount)} style={styles.amountCol} />
             <View style={styles.amountCol}>
               <ThemedText type="small" themeColor="textSecondary">
-                Discount Amount
+                {t('poForm.discountAmount')}
               </ThemedText>
               <ThemedView type="backgroundElement" style={styles.input}>
                 <TextInput
@@ -314,17 +316,17 @@ export default function PurchaseOrderFormScreen() {
             </View>
           </View>
 
-          <ReadOnlyField label="Total Amount" value={formatMoney(total)} accent />
+          <ReadOnlyField label={t('poForm.totalAmount')} value={formatMoney(total)} accent />
 
           <View style={styles.fieldGroup}>
             <ThemedText type="small" themeColor="textSecondary">
-              Note
+              {t('poForm.notePlaceholder')}
             </ThemedText>
             <ThemedView type="backgroundElement" style={[styles.input, styles.inputMultiline]}>
               <TextInput
                 value={note}
                 onChangeText={setNote}
-                placeholder="Note"
+                placeholder={t('poForm.notePlaceholder')}
                 placeholderTextColor={theme.textSecondary}
                 multiline
                 style={[styles.inputText, { color: theme.text }]}
@@ -336,15 +338,15 @@ export default function PurchaseOrderFormScreen() {
             onPress={() => setItemSheet(true)}
             style={({ pressed }) => [styles.chooseButton, pressed && styles.pressed]}>
             <Ionicons name="search" size={18} color="#ffffff" />
-            <ThemedText style={styles.chooseButtonText}>Choose Items</ThemedText>
+            <ThemedText style={styles.chooseButtonText}>{t('itemPicker.title')}</ThemedText>
           </Pressable>
 
           <View style={styles.selectedHeader}>
             <ThemedText type="smallBold" style={styles.selectedTitle}>
-              Selected Items
+              {t('form.selectedItems')}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {items.length} {items.length === 1 ? 'item' : 'items'}
+              {items.length} {items.length === 1 ? t('common.item') : t('common.items')}
             </ThemedText>
           </View>
 
@@ -352,7 +354,7 @@ export default function PurchaseOrderFormScreen() {
             <ThemedView type="backgroundElement" style={styles.emptyCard}>
               <Ionicons name="cube-outline" size={32} color={theme.textSecondary} />
               <ThemedText type="small" themeColor="textSecondary">
-                No items selected yet.
+                {t('form.noItemsSelected')}
               </ThemedText>
             </ThemedView>
           ) : (
@@ -388,7 +390,7 @@ export default function PurchaseOrderFormScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <ThemedText style={styles.saveButtonText}>
-                {isNew ? 'Purchase' : 'Save changes'}
+                {isNew ? t('poForm.purchase') : t('common.saveChanges')}
               </ThemedText>
             )}
           </Pressable>
@@ -397,7 +399,7 @@ export default function PurchaseOrderFormScreen() {
 
       <OptionSheet
         visible={vendorSheet}
-        title="Select vendor"
+        title={t('poForm.selectVendorTitle')}
         options={vendorOptions.map((option) => option.name)}
         selected={vendor}
         onSelect={(value) => {
@@ -409,7 +411,7 @@ export default function PurchaseOrderFormScreen() {
       />
       <OptionSheet
         visible={warehouseSheet}
-        title="Select warehouse"
+        title={t('filters.selectWarehouse')}
         options={warehouseOptions.map((option) => option.name)}
         selected={warehouse}
         onSelect={(value) => {

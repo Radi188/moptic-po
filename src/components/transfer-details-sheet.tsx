@@ -10,6 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import { generateRefillReportPdf, toReportRow } from '@/lib/refill-report';
 import { isTelegramConfigured, sendTelegramDocument } from '@/lib/telegram';
@@ -44,6 +45,7 @@ export function TransferDetailsSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const [sending, setSending] = useState(false);
   const meta = transfer ? STATUS_META[transfer.status] : null;
   const editable = transfer ? canEditTransfer(transfer.status) : false;
@@ -54,8 +56,8 @@ export function TransferDetailsSheet({
     if (!transfer || sending) return;
     if (!isTelegramConfigured()) {
       Alert.alert(
-        'Telegram not configured',
-        'The Telegram bot token / chat ID are missing in this build, so the report cannot be sent.',
+        t('transferDetails.telegramNotConfigured'),
+        t('transferDetails.telegramNotConfiguredBody'),
       );
       return;
     }
@@ -71,9 +73,12 @@ export function TransferDetailsSheet({
         filename: `transfer-${transfer.reference || transfer.id}.pdf`,
         caption: `Stock transfer ${transfer.reference} — ${reportMeta.branchName}`,
       });
-      Alert.alert('Sent', 'The report was sent to the Telegram group.');
+      Alert.alert(t('transferDetails.sent'), t('transferDetails.sentBody'));
     } catch (e) {
-      Alert.alert('Failed to send', e instanceof Error ? e.message : 'Unknown error.');
+      Alert.alert(
+        t('transferDetails.sendFailed'),
+        e instanceof Error ? e.message : t('common.unknownError'),
+      );
     } finally {
       setSending(false);
     }
@@ -96,37 +101,39 @@ export function TransferDetailsSheet({
             <>
               <View style={styles.titleRow}>
                 <ThemedText type="subtitle" style={styles.title}>
-                  Stock Transfer
+                  {t('transfers.title')}
                 </ThemedText>
                 <View style={[styles.badge, { backgroundColor: `${meta.color}22` }]}>
                   <View style={[styles.dot, { backgroundColor: meta.color }]} />
                   <ThemedText type="small" style={{ color: meta.color, fontWeight: '700' }}>
-                    {meta.label}
+                    {t(`status.${transfer.status}`)}
                   </ThemedText>
                 </View>
               </View>
 
               <ThemedView type="backgroundElement" style={styles.infoCard}>
-                <InfoRow label="From Warehouse" value={transfer.fromWarehouse} theme={theme} />
-                <InfoRow label="To Warehouse" value={transfer.toWarehouse} theme={theme} />
-                <InfoRow label="Transfer Reference" value={transfer.reference} theme={theme} />
+                <InfoRow label={t('transferDetails.fromWarehouse')} value={transfer.fromWarehouse} theme={theme} />
+                <InfoRow label={t('transferDetails.toWarehouse')} value={transfer.toWarehouse} theme={theme} />
+                <InfoRow label={t('transferDetails.reference')} value={transfer.reference} theme={theme} />
                 <InfoRow
-                  label="Transfer Date"
+                  label={t('transferDetails.date')}
                   value={formatDateTime(transfer.transactionDate)}
                   theme={theme}
                 />
                 {transfer.description ? (
                   <InfoRow
-                    label="Reference"
+                    label={t('transferDetails.note')}
                     value={transfer.description}
                     theme={theme}
                     numberOfLines={2}
                   />
                 ) : null}
-                <InfoRow label="User Request" value={transfer.userRequest} theme={theme} last />
+                <InfoRow label={t('transferDetails.userRequest')} value={transfer.userRequest} theme={theme} last />
               </ThemedView>
 
-              <ThemedText type="smallBold">Items ({transfer.items.length})</ThemedText>
+              <ThemedText type="smallBold">
+                {t('transferDetails.items', { count: transfer.items.length })}
+              </ThemedText>
               <ScrollView style={styles.list} bounces={false} showsVerticalScrollIndicator={false}>
                 {transfer.items.map((item, index) => (
                   <ItemRow key={item.id} item={item} index={index} theme={theme} />
@@ -147,7 +154,7 @@ export function TransferDetailsSheet({
                   <>
                     <Ionicons name="paper-plane-outline" size={18} color={theme.tint} />
                     <ThemedText style={[styles.telegramText, { color: theme.tint }]}>
-                      Send report to Telegram
+                      {t('transferDetails.sendToTelegram')}
                     </ThemedText>
                   </>
                 )}
@@ -159,18 +166,18 @@ export function TransferDetailsSheet({
                     onPress={() => onDecline(transfer.id)}
                     style={({ pressed }) => [styles.declineButton, pressed && styles.pressed]}>
                     <Ionicons name="close" size={18} color={DANGER} />
-                    <ThemedText style={[styles.actionText, { color: DANGER }]}>Decline</ThemedText>
+                    <ThemedText style={[styles.actionText, { color: DANGER }]}>{t('common.decline')}</ThemedText>
                   </Pressable>
                   <Pressable
                     onPress={() => onApprove(transfer.id)}
                     style={({ pressed }) => [styles.approveButton, pressed && styles.pressed]}>
                     <Ionicons name="checkmark" size={18} color="#ffffff" />
-                    <ThemedText style={styles.approveText}>Approve</ThemedText>
+                    <ThemedText style={styles.approveText}>{t('common.approve')}</ThemedText>
                   </Pressable>
                 </View>
               ) : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-                  This transfer is {transfer.status}.
+                  {t('transferDetails.statusNote', { status: t(`status.${transfer.status}`) })}
                 </ThemedText>
               )}
             </>
@@ -351,7 +358,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    lineHeight: 26,
+    // Taller than the font so tall Khmer glyphs aren't clipped at the top.
+    lineHeight: 30,
     flexShrink: 1,
   },
   badge: {

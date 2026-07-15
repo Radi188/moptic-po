@@ -24,6 +24,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
+import { useTranslation } from "@/contexts/i18n";
 import { useTheme } from "@/hooks/use-theme";
 
 const BRAND = "#232843";
@@ -32,6 +33,8 @@ const DANGER = "#e5484d";
 export default function LoginScreen() {
   const theme = useTheme();
   const { signIn } = useAuth();
+  const { t, language } = useTranslation();
+  const km = language === "km";
 
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
@@ -54,7 +57,7 @@ export default function LoginScreen() {
       // On success the auth guard in the root layout swaps to the tabs.
       await signIn(username, password);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to sign in.");
+      setError(e instanceof Error ? e.message : t("login.errorGeneric"));
     } finally {
       setSubmitting(false);
     }
@@ -91,19 +94,23 @@ export default function LoginScreen() {
               />
               <ThemedText
                 type="title"
-                style={[styles.heading, isTablet && styles.headingTablet]}
+                style={[
+                  styles.heading,
+                  isTablet && styles.headingTablet,
+                  km && (isTablet ? styles.headingTabletKm : styles.headingKm),
+                ]}
               >
-                Welcome back
+                {t("login.welcome")}
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.subheading}>
-                Sign in to continue to M Optic-PO
+                {t("login.subtitle")}
               </ThemedText>
             </ThemedView>
 
             <ThemedView style={styles.form}>
               <Field
                 icon="person-outline"
-                placeholder="Username"
+                placeholder={t("login.username")}
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
@@ -114,7 +121,7 @@ export default function LoginScreen() {
 
               <Field
                 icon="lock-closed-outline"
-                placeholder="Password"
+                placeholder={t("login.password")}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -128,7 +135,9 @@ export default function LoginScreen() {
                     onPress={() => setShowPassword((s) => !s)}
                     hitSlop={Spacing.two}
                     accessibilityLabel={
-                      showPassword ? "Hide password" : "Show password"
+                      showPassword
+                        ? t("login.hidePassword")
+                        : t("login.showPassword")
                     }
                   >
                     <Ionicons
@@ -150,13 +159,11 @@ export default function LoginScreen() {
               )}
 
               <Pressable
-                onPress={() =>
-                  setError("Password recovery is not available yet.")
-                }
+                onPress={() => setError(t("login.errorForgot"))}
                 style={styles.forgot}
               >
                 <ThemedText type="link" style={{ color: theme.tint }}>
-                  Forgot password?
+                  {t("login.forgotPassword")}
                 </ThemedText>
               </Pressable>
 
@@ -172,7 +179,9 @@ export default function LoginScreen() {
                 {submitting ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <ThemedText style={styles.buttonText}>Sign in</ThemedText>
+                  <ThemedText style={styles.buttonText}>
+                    {t("login.signIn")}
+                  </ThemedText>
                 )}
               </Pressable>
             </ThemedView>
@@ -182,7 +191,7 @@ export default function LoginScreen() {
             <Pressable
               onPress={openApiModal}
               hitSlop={Spacing.two}
-              accessibilityLabel="Change API server"
+              accessibilityLabel={t("login.changeApiServer")}
               style={({ pressed }) => [
                 styles.apiRow,
                 pressed && styles.pressed,
@@ -199,7 +208,7 @@ export default function LoginScreen() {
                 numberOfLines={1}
                 style={styles.apiUrl}
               >
-                {isApiConfigured() ? baseUrl : "Mock data (no API configured)"}
+                {isApiConfigured() ? baseUrl : t("login.mockData")}
               </ThemedText>
               <Ionicons
                 name="create-outline"
@@ -241,6 +250,7 @@ function ApiUrlModal({
   onReset: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   return (
     <Modal
       visible={visible}
@@ -255,10 +265,10 @@ function ApiUrlModal({
         >
           <ThemedView style={styles.modalCard}>
             <ThemedText type="subtitle" style={styles.modalTitle}>
-              API server
+              {t("login.apiServer")}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Full base URL the app should connect to.
+              {t("login.apiServerHint")}
             </ThemedText>
             <ThemedView type="backgroundElement" style={styles.modalInputWrap}>
               <TextInput
@@ -278,7 +288,7 @@ function ApiUrlModal({
                 themeColor="textSecondary"
                 numberOfLines={1}
               >
-                Default: {API_BASE_URL}
+                {t("login.apiDefault")}: {API_BASE_URL}
               </ThemedText>
             )}
             <View style={styles.modalActions}>
@@ -288,7 +298,7 @@ function ApiUrlModal({
                 style={({ pressed }) => pressed && styles.pressed}
               >
                 <ThemedText type="smallBold" themeColor="textSecondary">
-                  Reset
+                  {t("common.reset")}
                 </ThemedText>
               </Pressable>
               <View style={styles.modalActionsRight}>
@@ -298,7 +308,7 @@ function ApiUrlModal({
                   style={({ pressed }) => pressed && styles.pressed}
                 >
                   <ThemedText type="smallBold" themeColor="textSecondary">
-                    Cancel
+                    {t("common.cancel")}
                   </ThemedText>
                 </Pressable>
                 <Pressable
@@ -307,7 +317,7 @@ function ApiUrlModal({
                   style={({ pressed }) => pressed && styles.pressed}
                 >
                   <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                    Save
+                    {t("common.save")}
                   </ThemedText>
                 </Pressable>
               </View>
@@ -389,6 +399,13 @@ const styles = StyleSheet.create({
   headingTablet: {
     fontSize: 40,
     lineHeight: 48,
+  },
+  // Khmer needs extra line height so the tall heading glyphs don't clip.
+  headingKm: {
+    lineHeight: 50,
+  },
+  headingTabletKm: {
+    lineHeight: 62,
   },
   subheading: {
     textAlign: "center",

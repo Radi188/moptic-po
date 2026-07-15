@@ -9,6 +9,7 @@ export type PurchaseOrderStatus =
   | 'pending'
   | 'approved'
   | 'received'
+  | 'invoiced'
   | 'cancelled';
 
 export type PurchaseOrderItem = {
@@ -26,6 +27,8 @@ export type PurchaseOrder = {
   reference: string;
   transactionDate: string; // ISO
   vendor: string;
+  /** Vendor id (from the API detail/list) — needed to create an invoice. */
+  vendorId?: string;
   warehouse: string;
   amount: number;
   discountAmount: number;
@@ -43,6 +46,7 @@ export const STATUS_META: Record<PurchaseOrderStatus, { label: string; color: st
   pending: { label: 'Pending', color: '#F5A623' },
   approved: { label: 'Approved', color: '#232843' },
   received: { label: 'Received', color: '#30A46C' },
+  invoiced: { label: 'Invoiced', color: '#3E63DD' },
   cancelled: { label: 'Cancelled', color: '#e5484d' },
 };
 
@@ -51,6 +55,7 @@ export const ORDER_STATUSES: PurchaseOrderStatus[] = [
   'pending',
   'approved',
   'received',
+  'invoiced',
   'cancelled',
 ];
 
@@ -259,6 +264,7 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function formatDateTime(iso: string) {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
   const day = DAYS[d.getDay()];
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -271,6 +277,7 @@ export function formatDateTime(iso: string) {
 
 export function formatDate(iso: string) {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   return `${dd}/${mm}/${d.getFullYear()}`;

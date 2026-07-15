@@ -7,6 +7,7 @@ import { loadBaseUrlOverride } from '@/api/config';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { QuickLoginModal } from '@/components/quick-login-modal';
 import { AuthProvider, useAuth } from '@/contexts/auth';
+import { LanguageProvider } from '@/contexts/i18n';
 import { AppThemeProvider, useThemePreference } from '@/contexts/theme';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 
@@ -81,10 +82,12 @@ function ThemedApp() {
 
 export default function RootLayout() {
   return (
-    <AppThemeProvider>
-      <AuthProvider>
-        <ThemedApp />
-      </AuthProvider>
-    </AppThemeProvider>
+    <LanguageProvider>
+      <AppThemeProvider>
+        <AuthProvider>
+          <ThemedApp />
+        </AuthProvider>
+      </AppThemeProvider>
+    </LanguageProvider>
   );
 }

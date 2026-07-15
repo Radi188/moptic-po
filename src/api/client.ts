@@ -75,7 +75,14 @@ function logTiming(
     ?.metadata?.start;
   const ms = start ? Date.now() - start : undefined;
   const method = config?.method?.toUpperCase() ?? "GET";
-  const url = `${config?.baseURL ?? ""}${config?.url ?? ""}`;
+  const params = config?.params as Record<string, unknown> | undefined;
+  const query = params
+    ? Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${k}=${v}`)
+        .join("&")
+    : "";
+  const url = `${config?.baseURL ?? ""}${config?.url ?? ""}${query ? `?${query}` : ""}`;
   console.log(`[api] ${method} ${url} -> ${status ?? code ?? "?"} (${ms ?? "?"}ms)`);
 }
 

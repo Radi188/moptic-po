@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { type Branch } from '@/constants/branches';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 
@@ -21,6 +22,7 @@ export function BranchPickerSheet({ visible, selectedId, onSelect, onClose }: Pr
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branches = session?.branches ?? [];
 
   return (
@@ -30,7 +32,7 @@ export function BranchPickerSheet({ visible, selectedId, onSelect, onClose }: Pr
         <ThemedView style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
           <ThemedView style={styles.handle} type="backgroundSelected" />
           <ThemedText type="subtitle" style={styles.title}>
-            Select branch
+            {t('branchPicker.title')}
           </ThemedText>
           <ScrollView bounces={false}>
             {branches.map((item) => (
@@ -95,7 +97,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    lineHeight: 28,
+    // Taller than the font so tall Khmer glyphs aren't clipped at the top.
+    lineHeight: 34,
   },
   option: {
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 
@@ -34,11 +35,14 @@ export function OptionSheet({
   searchable,
   searchValue,
   onSearchChange,
-  searchPlaceholder = 'Search…',
-  emptyText = 'No results.',
+  searchPlaceholder,
+  emptyText,
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
+  const searchPlaceholderText = searchPlaceholder ?? t('common.searchPlaceholder');
+  const emptyTextResolved = emptyText ?? t('common.noResults');
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -55,7 +59,7 @@ export function OptionSheet({
               <TextInput
                 value={searchValue}
                 onChangeText={onSearchChange}
-                placeholder={searchPlaceholder}
+                placeholder={searchPlaceholderText}
                 placeholderTextColor={theme.textSecondary}
                 style={[styles.searchInput, { color: theme.text }]}
                 autoCorrect={false}
@@ -72,7 +76,7 @@ export function OptionSheet({
           <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
             {options.length === 0 && (
               <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-                {emptyText}
+                {emptyTextResolved}
               </ThemedText>
             )}
             {options.map((option, index) => {
@@ -122,7 +126,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    lineHeight: 28,
+    // Taller than the font so tall Khmer glyphs aren't clipped at the top.
+    lineHeight: 34,
   },
   searchBox: {
     flexDirection: 'row',

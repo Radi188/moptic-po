@@ -26,6 +26,10 @@ type ApiListItem = {
   stock_transfer_details_count?: number;
   note?: string | null;
   description?: string | null;
+  // Real timestamps (with a time-of-day) — transaction_date is date-only.
+  created_at?: string;
+  confirmed_at?: string;
+  updated_at?: string;
 };
 
 type ApiListResponse =
@@ -72,6 +76,28 @@ const toIso = (s: string) => {
   return `${s}T00:00:00`;
 };
 
+const parseDate = (s?: string | null): Date | null => {
+  if (!s) return null;
+  const d = new Date(toIso(s));
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+// transaction_date is date-only, so alone it renders as 00:00 (12:00 AM). Keep
+// that date but borrow the time-of-day from a real timestamp (created_at/
+// confirmed_at) when one is available.
+const mergeDateAndTime = (
+  businessDate?: string | null,
+  timeSource?: string | null,
+): string => {
+  const date = parseDate(businessDate);
+  const time = parseDate(timeSource);
+  if (!date) return time ? time.toISOString() : "";
+  if (time && (time.getHours() || time.getMinutes() || time.getSeconds())) {
+    date.setHours(time.getHours(), time.getMinutes(), time.getSeconds(), 0);
+  }
+  return date.toISOString();
+};
+
 function mapStatus(s: string | undefined): TransferStatus {
   const v = String(s ?? "").toLowerCase();
   if (v.includes("approve") || v.includes("confirm") || v.includes("accept"))
@@ -88,7 +114,10 @@ function mapListItem(row: ApiListItem): StockTransfer {
       row.warehouse_from?.warehouse_name ?? String(row.from_warehouse ?? ""),
     toWarehouse:
       row.warehouse_to?.warehouse_name ?? String(row.to_warehouse ?? ""),
-    transactionDate: toIso(row.transaction_date),
+    transactionDate: mergeDateAndTime(
+      row.transaction_date,
+      row.created_at ?? row.confirmed_at ?? row.updated_at,
+    ),
     description: row.note ?? row.description ?? "",
     userRequest: row.request_user?.name ?? "",
     status: mapStatus(row.status),

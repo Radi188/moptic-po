@@ -10,6 +10,7 @@ import { ThemedView } from '@/components/themed-view';
 import { formatMoney } from '@/data/inventory';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { SkeletonList } from '@/components/skeleton';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 const OVER = '#30A46C';
@@ -25,6 +26,7 @@ function monthLabel(d: Date) {
 export default function LossSummaryScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useTranslation();
 
   const [month, setMonth] = useState(() => {
     const d = new Date();
@@ -42,11 +44,11 @@ export default function LossSummaryScreen() {
     return fetchLossSummary({ month: monthKey(d) })
       .then(setRows)
       .catch((e) => {
-        setError(e instanceof Error ? e.message : 'Failed to load loss report.');
+        setError(e instanceof Error ? e.message : t('loss.loadError'));
         setRows([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load(month);
@@ -70,8 +72,8 @@ export default function LossSummaryScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="Loss Report"
-        subtitle="Over / short by branch"
+        title={t('loss.title')}
+        subtitle={t('loss.subtitle')}
         onBack={() => router.back()}
       />
 
@@ -116,7 +118,7 @@ export default function LossSummaryScreen() {
             <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No loss data for this month.'}
+              {error ?? t('loss.empty')}
             </ThemedText>
           )
         }

@@ -3,6 +3,7 @@ import { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -28,6 +29,7 @@ export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { isTablet } = useResponsive();
+  const { t } = useTranslation();
 
   // Roomier bar + icons + labels on tablets; a modest bump on phones too.
   const barBase = isTablet ? 68 : 56;
@@ -51,35 +53,35 @@ export default function TabsLayout() {
       }}>
       <Tabs.Screen
         name="index"
-        options={{ title: 'Home', tabBarIcon: tabIcon('home', iconSize) }}
+        options={{ title: t('tabs.home'), tabBarIcon: tabIcon('home', iconSize) }}
       />
       <Tabs.Screen
         name="purchase-orders"
         options={{
-          title: 'Purchase Order',
-          tabBarLabel: 'Purchase',
+          title: t('tabs.purchaseOrder'),
+          tabBarLabel: t('tabs.purchase'),
           tabBarIcon: tabIcon('receipt', iconSize),
         }}
       />
       <Tabs.Screen
         name="inventory"
         options={{
-          title: 'Inventory Overview',
-          tabBarLabel: 'Inventory',
+          title: t('tabs.inventoryOverview'),
+          tabBarLabel: t('tabs.inventory'),
           tabBarIcon: tabIcon('cube', iconSize),
         }}
       />
       <Tabs.Screen
         name="transfers"
         options={{
-          title: 'Stock Transfer',
-          tabBarLabel: 'Transfer',
+          title: t('tabs.stockTransfer'),
+          tabBarLabel: t('tabs.transfer'),
           tabBarIcon: tabIcon('swap-horizontal', iconSize),
         }}
       />
       <Tabs.Screen
         name="settings"
-        options={{ title: 'Settings', tabBarIcon: tabIcon('settings', iconSize) }}
+        options={{ title: t('tabs.settings'), tabBarIcon: tabIcon('settings', iconSize) }}
       />
     </Tabs>
   );

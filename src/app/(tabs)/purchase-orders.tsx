@@ -2,7 +2,7 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -18,11 +18,14 @@ import Ionicons from "react-native-vector-icons/Ionicons";
 
 import { isApiConfigured } from "@/api/config";
 import {
+  fetchPurchaseInvoice,
+  fetchPurchaseInvoices,
   fetchPurchaseOrder,
   fetchPurchaseOrders,
   getWarehouses,
   type ApiOption,
 } from "@/api/purchase-orders";
+import { CreateInvoiceSheet } from "@/components/create-invoice-sheet";
 import { OptionSheet } from "@/components/option-sheet";
 import { ListLoadingOverlay } from "@/components/list-loading-overlay";
 import { PurchaseOrderDetailsSheet } from "@/components/purchase-order-details-sheet";
@@ -38,6 +41,7 @@ import {
   type PurchaseOrder,
 } from "@/data/purchase-orders";
 import { SkeletonList } from "@/components/skeleton";
+import { useTranslation } from "@/contexts/i18n";
 import { useResponsive } from "@/hooks/use-responsive";
 import { useTheme } from "@/hooks/use-theme";
 
@@ -53,8 +57,11 @@ export default function PurchaseOrdersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { t, language } = useTranslation();
+  const km = language === "km";
   const { isTablet } = useResponsive();
 
+  const [tab, setTab] = useState<"orders" | "invoices">("orders");
   const [search, setSearch] = useState("");
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
@@ -81,6 +88,9 @@ export default function PurchaseOrdersScreen() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selected, setSelected] = useState<PurchaseOrder | null>(null);
 
+  const [invoiceVisible, setInvoiceVisible] = useState(false);
+  const [invoiceOrder, setInvoiceOrder] = useState<PurchaseOrder | null>(null);
+
   // Warehouse dropdown options.
   useEffect(() => {
     getWarehouses()
@@ -88,18 +98,30 @@ export default function PurchaseOrdersScreen() {
       .catch(() => {});
   }, []);
 
+  // Resolve a warehouse id (all the list rows carry) to its display name.
+  const warehouseNameById = useMemo(() => {
+    const map = new Map(warehouseOptions.map((o) => [o.id, o.name]));
+    return (id: string) => map.get(id) ?? "";
+  }, [warehouseOptions]);
+
   const load = useCallback(
     (targetPage: number, mode: "replace" | "append") => {
       if (mode === "append") setLoadingMore(true);
       else setLoading(true);
       setError(null);
-      return fetchPurchaseOrders({
-        page: targetPage,
-        search,
-        warehouse,
-        dateFrom: ymd(dateFrom),
-        dateTo: ymd(dateTo),
-      })
+      // Invoices only support search server-side; orders also filter by
+      // warehouse and date range.
+      const request =
+        tab === "invoices"
+          ? fetchPurchaseInvoices({ page: targetPage, search })
+          : fetchPurchaseOrders({
+              page: targetPage,
+              search,
+              warehouse,
+              dateFrom: ymd(dateFrom),
+              dateTo: ymd(dateTo),
+            });
+      return request
         .then((res) => {
           setItems((prev) =>
             mode === "append" ? [...prev, ...res.items] : res.items,
@@ -109,14 +131,18 @@ export default function PurchaseOrdersScreen() {
           setPage(res.page);
         })
         .catch((e) =>
-          setError(e instanceof Error ? e.message : "Failed to load orders."),
+          setError(
+            e instanceof Error
+              ? e.message
+              : t(tab === "invoices" ? "po.invoiceLoadError" : "po.loadError"),
+          ),
         )
         .finally(() => {
           setLoading(false);
           setLoadingMore(false);
         });
     },
-    [search, warehouse, dateFrom, dateTo],
+    [tab, search, warehouse, dateFrom, dateTo, t],
   );
 
   // Reload from the first page on mount, refocus, or when filters change.
@@ -133,9 +159,12 @@ export default function PurchaseOrdersScreen() {
 
   const loadMore = useCallback(() => {
     if (loading || loadingMore || refreshing) return;
-    if (page >= totalPages) return;
+    // Nothing to page through on an empty list, and guard against a missing/NaN
+    // page count so onEndReached can't fire an endless append loop.
+    if (items.length === 0) return;
+    if (!totalPages || page >= totalPages) return;
     load(page + 1, "append");
-  }, [loading, loadingMore, refreshing, page, totalPages, load]);
+  }, [loading, loadingMore, refreshing, items.length, page, totalPages, load]);
 
   function changeSearch(text: string) {
     setSearch(text);
@@ -165,11 +194,20 @@ export default function PurchaseOrdersScreen() {
     setDatePicker(null);
   }
 
+  function changeTab(next: "orders" | "invoices") {
+    if (next === tab) return;
+    setTab(next);
+    setItems([]);
+    setPage(1);
+  }
+
   function openOrder(id: string) {
     setSelected(null);
     setDetailLoading(true);
     setDetailVisible(true);
-    fetchPurchaseOrder(id)
+    const fetchDetail =
+      tab === "invoices" ? fetchPurchaseInvoice : fetchPurchaseOrder;
+    fetchDetail(id)
       .then((o) => setSelected(o ?? null))
       .catch(() => setDetailVisible(false))
       .finally(() => setDetailLoading(false));
@@ -178,6 +216,24 @@ export default function PurchaseOrdersScreen() {
   function closeDetail() {
     setDetailVisible(false);
     setSelected(null);
+  }
+
+  function openCreateInvoice(order: PurchaseOrder) {
+    setDetailVisible(false);
+    setInvoiceOrder(order);
+    setInvoiceVisible(true);
+  }
+
+  function closeInvoice() {
+    setInvoiceVisible(false);
+    setInvoiceOrder(null);
+  }
+
+  function onInvoiceCreated() {
+    closeInvoice();
+    setSelected(null);
+    // The order is now invoiced — refresh the list so its badge updates.
+    load(1, "replace");
   }
 
   function newOrder() {
@@ -193,20 +249,76 @@ export default function PurchaseOrdersScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View>
-          <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Purchase Orders</ThemedText>
+          <ThemedText
+            style={[
+              styles.title,
+              isTablet && styles.titleTablet,
+              km && (isTablet ? styles.titleTabletKm : styles.titleKm),
+            ]}>
+            {tab === "invoices" ? t("po.invoiceTitle") : t("po.title")}
+          </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {total} orders
+            {tab === "invoices"
+              ? t("po.invoiceCount", { count: total })
+              : t("po.count", { count: total })}
           </ThemedText>
         </View>
-        <Pressable
-          onPress={newOrder}
-          style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="add" size={20} color="#ffffff" />
-          <ThemedText style={styles.newButtonText}>New</ThemedText>
-        </Pressable>
+        {tab === "orders" && (
+          <Pressable
+            onPress={newOrder}
+            style={({ pressed }) => [
+              styles.newButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons name="add" size={20} color="#ffffff" />
+            <ThemedText style={styles.newButtonText}>
+              {t("common.new")}
+            </ThemedText>
+          </Pressable>
+        )}
       </View>
 
+      <ThemedView type="backgroundElement" style={styles.tabs}>
+        <Pressable
+          onPress={() => changeTab("orders")}
+          style={({ pressed }) => [
+            styles.tab,
+            tab === "orders" && styles.tabActive,
+            pressed && styles.pressed,
+          ]}
+        >
+          <ThemedText
+            type="smallBold"
+            style={
+              tab === "orders" ? styles.tabTextActive : { color: theme.textSecondary }
+            }
+          >
+            {t("po.tabOrders")}
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          onPress={() => changeTab("invoices")}
+          style={({ pressed }) => [
+            styles.tab,
+            tab === "invoices" && styles.tabActive,
+            pressed && styles.pressed,
+          ]}
+        >
+          <ThemedText
+            type="smallBold"
+            style={
+              tab === "invoices"
+                ? styles.tabTextActive
+                : { color: theme.textSecondary }
+            }
+          >
+            {t("po.tabInvoices")}
+          </ThemedText>
+        </Pressable>
+      </ThemedView>
+
+      {tab === "orders" && (
       <View style={styles.controls}>
         <Pressable
           onPress={() => setWarehouseSheet(true)}
@@ -214,7 +326,7 @@ export default function PurchaseOrdersScreen() {
         >
           <View style={styles.fieldGroup}>
             <ThemedText type="small" themeColor="textSecondary">
-              Warehouse
+              {t("filters.warehouse")}
             </ThemedText>
             <ThemedView type="backgroundElement" style={styles.selectBox}>
               <Ionicons
@@ -229,7 +341,7 @@ export default function PurchaseOrdersScreen() {
                   { color: warehouse ? theme.text : theme.textSecondary },
                 ]}
               >
-                {warehouse?.name ?? "All warehouses"}
+                {warehouse?.name ?? t("filters.allWarehouses")}
               </ThemedText>
               <Ionicons
                 name="chevron-down"
@@ -246,7 +358,7 @@ export default function PurchaseOrdersScreen() {
             style={({ pressed }) => [styles.dateCol, pressed && styles.pressed]}
           >
             <ThemedText type="small" themeColor="textSecondary">
-              Date From
+              {t("filters.dateFrom")}
             </ThemedText>
             <ThemedView type="backgroundElement" style={styles.selectBox}>
               <Ionicons
@@ -265,7 +377,7 @@ export default function PurchaseOrdersScreen() {
             style={({ pressed }) => [styles.dateCol, pressed && styles.pressed]}
           >
             <ThemedText type="small" themeColor="textSecondary">
-              Date To
+              {t("filters.dateTo")}
             </ThemedText>
             <ThemedView type="backgroundElement" style={styles.selectBox}>
               <Ionicons
@@ -280,6 +392,7 @@ export default function PurchaseOrdersScreen() {
           </Pressable>
         </View>
       </View>
+      )}
 
       {datePicker && Platform.OS === "android" && (
         <DateTimePicker
@@ -303,15 +416,17 @@ export default function PurchaseOrdersScreen() {
                 <View style={styles.datePickerHeader}>
                   <Pressable onPress={() => setDatePicker(null)} hitSlop={Spacing.two}>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Cancel
+                      {t("common.cancel")}
                     </ThemedText>
                   </Pressable>
                   <ThemedText type="smallBold">
-                    {datePicker === "from" ? "Date From" : "Date To"}
+                    {datePicker === "from"
+                      ? t("filters.dateFrom")
+                      : t("filters.dateTo")}
                   </ThemedText>
                   <Pressable onPress={confirmDate} hitSlop={Spacing.two}>
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Done
+                      {t("common.done")}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -352,6 +467,7 @@ export default function PurchaseOrdersScreen() {
           <View style={isTablet ? styles.gridItem : undefined}>
             <OrderCard
               order={item}
+              warehouseName={warehouseNameById(item.warehouse)}
               onPress={() => openOrder(item.id)}
               onLongPress={
                 isApiConfigured() ? undefined : () => editOrder(item.id)
@@ -368,7 +484,8 @@ export default function PurchaseOrdersScreen() {
               themeColor="textSecondary"
               style={styles.empty}
             >
-              {error ?? "No purchase orders match your filters."}
+              {error ??
+                (tab === "invoices" ? t("po.invoiceEmpty") : t("po.empty"))}
             </ThemedText>
           )
         }
@@ -386,17 +503,25 @@ export default function PurchaseOrdersScreen() {
         loading={detailLoading}
         order={selected}
         onClose={closeDetail}
-        onEdit={editOrder}
+        onEdit={tab === "orders" ? editOrder : undefined}
+        onCreateInvoice={tab === "orders" ? openCreateInvoice : undefined}
+      />
+
+      <CreateInvoiceSheet
+        visible={invoiceVisible}
+        order={invoiceOrder}
+        onClose={closeInvoice}
+        onCreated={onInvoiceCreated}
       />
 
       <OptionSheet
         visible={warehouseSheet}
-        title="Select warehouse"
-        options={["All warehouses", ...warehouseOptions.map((o) => o.name)]}
-        selected={warehouse?.name ?? "All warehouses"}
+        title={t("filters.selectWarehouse")}
+        options={[t("filters.allWarehouses"), ...warehouseOptions.map((o) => o.name)]}
+        selected={warehouse?.name ?? t("filters.allWarehouses")}
         onSelect={(value) => {
           setWarehouse(
-            value === "All warehouses"
+            value === t("filters.allWarehouses")
               ? null
               : (warehouseOptions.find((o) => o.name === value) ?? null),
           );
@@ -413,14 +538,17 @@ export default function PurchaseOrdersScreen() {
 
 function OrderCard({
   order,
+  warehouseName,
   onPress,
   onLongPress,
 }: {
   order: PurchaseOrder;
+  warehouseName?: string;
   onPress: () => void;
   onLongPress?: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const statusColor = order.status ? STATUS_META[order.status].color : theme.tint;
   const itemCount = order.itemsCount ?? order.items.length;
 
@@ -447,11 +575,17 @@ function OrderCard({
               >
                 {order.reference}
               </ThemedText>
-              {order.status && <StatusBadge status={order.status} />}
               <View style={styles.flexSpacer} />
-              <ThemedText type="smallBold" style={styles.cardTotal}>
-                {formatMoney(order.totalAmount)}
-              </ThemedText>
+              <View style={styles.priceCol}>
+                <ThemedText type="smallBold" style={styles.cardTotal}>
+                  {formatMoney(order.totalAmount)}
+                </ThemedText>
+                {order.status && (
+                  <View>
+                    <StatusBadge status={order.status} />
+                  </View>
+                )}
+              </View>
             </View>
             <View style={styles.inlineRow}>
               <Ionicons
@@ -467,6 +601,22 @@ function OrderCard({
                 {order.vendor}
               </ThemedText>
             </View>
+            {warehouseName ? (
+              <View style={styles.inlineRow}>
+                <Ionicons
+                  name="business-outline"
+                  size={13}
+                  color={theme.textSecondary}
+                />
+                <ThemedText
+                  type="small"
+                  themeColor="textSecondary"
+                  numberOfLines={1}
+                >
+                  {warehouseName}
+                </ThemedText>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -488,7 +638,7 @@ function OrderCard({
               color={theme.textSecondary}
             />
             <ThemedText type="small" themeColor="textSecondary">
-              {itemCount} {itemCount === 1 ? "item" : "items"}
+              {itemCount} {itemCount === 1 ? t("common.item") : t("common.items")}
             </ThemedText>
           </View>
         </View>
@@ -518,6 +668,13 @@ const styles = StyleSheet.create({
     fontSize: 32,
     lineHeight: 40,
   },
+  // Khmer titles need more line height so tall stacked glyphs don't clip.
+  titleKm: {
+    lineHeight: 42,
+  },
+  titleTabletKm: {
+    lineHeight: 50,
+  },
   newButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -531,6 +688,27 @@ const styles = StyleSheet.create({
   newButtonText: {
     color: "#ffffff",
     fontWeight: "600",
+  },
+  tabs: {
+    flexDirection: "row",
+    marginHorizontal: Spacing.four,
+    marginBottom: Spacing.three,
+    padding: Spacing.half,
+    borderRadius: Spacing.three,
+    gap: Spacing.half,
+  },
+  tab: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    height: 38,
+    borderRadius: Spacing.two,
+  },
+  tabActive: {
+    backgroundColor: BRAND,
+  },
+  tabTextActive: {
+    color: "#ffffff",
   },
   controls: {
     paddingHorizontal: Spacing.four,
@@ -619,8 +797,12 @@ const styles = StyleSheet.create({
   },
   refRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: Spacing.two,
+  },
+  priceCol: {
+    alignItems: "flex-end",
+    gap: Spacing.half,
   },
   cardRef: {
     fontSize: 15,

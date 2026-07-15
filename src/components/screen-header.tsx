@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -19,13 +20,15 @@ export function ScreenHeader({ title, subtitle, right, onBack }: Props) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const { isTablet } = useResponsive();
+  const { t, language } = useTranslation();
+  const km = language === 'km';
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
       <Pressable
         onPress={onBack}
         hitSlop={Spacing.two}
-        accessibilityLabel="Go back"
+        accessibilityLabel={t('common.goBack')}
         style={({ pressed }) => [
           styles.backTile,
           isTablet && styles.backTileTablet,
@@ -36,7 +39,13 @@ export function ScreenHeader({ title, subtitle, right, onBack }: Props) {
       </Pressable>
       <View style={styles.headerText}>
         <ThemedText
-          style={[styles.headerTitle, isTablet && styles.headerTitleTablet]}
+          style={[
+            styles.headerTitle,
+            isTablet && styles.headerTitleTablet,
+            // Khmer stacks glyphs taller than Latin; give the single-line title
+            // more line height so its top isn't clipped.
+            km && (isTablet ? styles.headerTitleTabletKm : styles.headerTitleKm),
+          ]}
           numberOfLines={1}>
           {title}
         </ThemedText>
@@ -77,13 +86,19 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    // Roomy enough for Khmer (tall stacked glyphs) without clipping.
     lineHeight: 28,
     fontWeight: '700',
   },
   headerTitleTablet: {
     fontSize: 26,
     lineHeight: 36,
+  },
+  // Khmer needs ~1.6x the font size or the tall stacked glyphs clip at the top.
+  headerTitleKm: {
+    lineHeight: 34,
+  },
+  headerTitleTabletKm: {
+    lineHeight: 44,
   },
   pressed: {
     opacity: 0.7,

@@ -27,6 +27,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { SkeletonList } from '@/components/skeleton';
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 import { generateRefillReportPdf, toReportRow } from '@/lib/refill-report';
@@ -80,6 +81,7 @@ export default function BranchRefillScreen() {
   const theme = useTheme();
   const { isTablet } = useResponsive();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const [rows, setRows] = useState<SoldItem[]>([]);
   // Catalog items the user adds on top of the sold items (e.g. brand-new stock).
@@ -133,7 +135,7 @@ export default function BranchRefillScreen() {
         }
       })
       .catch((e) => {
-        if (active) setError(e instanceof Error ? e.message : 'Failed to load sales.');
+        if (active) setError(e instanceof Error ? e.message : t('refill.loadSalesError'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -141,7 +143,7 @@ export default function BranchRefillScreen() {
     return () => {
       active = false;
     };
-  }, [params.date, params.branchId]);
+  }, [params.date, params.branchId, t]);
 
   // On-hand quantities in the source warehouse (what's available to transfer out).
   useEffect(() => {
@@ -220,26 +222,30 @@ export default function BranchRefillScreen() {
   async function handleTransfer() {
     if (submitting) return;
     if (!destination) {
-      setError('Select a destination warehouse first.');
+      setError(t('refill.selectDestFirst'));
       return;
     }
     if (params.sourceId === destination.id) {
-      setError('Source and destination warehouses are the same.');
+      setError(t('refill.sameWarehouse'));
       return;
     }
     const items = allRows
       .map((r) => ({ row: r, qty: parseInt(qtys[r.itemId] ?? '', 10) || 0 }))
       .filter((x) => x.qty > 0);
     if (items.length === 0) {
-      setError('Enter a refill quantity for at least one item.');
+      setError(t('refill.enterQty'));
       return;
     }
     const over = items.filter(({ row, qty }) => qty > available(row.itemId));
     if (over.length > 0) {
       setError(
-        `Not enough stock in ${params.sourceName} for ${over.length} ${
-          over.length === 1 ? 'item' : 'items'
-        } (e.g. ${over[0].row.itemCode}: ${available(over[0].row.itemId)} available).`,
+        t('refill.notEnoughStock', {
+          source: params.sourceName,
+          count: over.length,
+          unit: over.length === 1 ? t('common.item') : t('common.items'),
+          code: over[0].row.itemCode,
+          available: available(over[0].row.itemId),
+        }),
       );
       return;
     }
@@ -275,7 +281,7 @@ export default function BranchRefillScreen() {
       await sendRefillReport(reportItems);
       router.back();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create transfer.');
+      setError(e instanceof Error ? e.message : t('refill.createError'));
     } finally {
       setSubmitting(false);
     }
@@ -289,8 +295,8 @@ export default function BranchRefillScreen() {
   async function sendRefillReport(items: { row: SoldItem; qty: number }[]) {
     if (!isTelegramConfigured()) {
       Alert.alert(
-        'Telegram not configured',
-        'The Telegram bot token / chat ID are missing in this build, so the refill report was not sent.',
+        t('transferDetails.telegramNotConfigured'),
+        t('refill.telegramNotConfiguredBody'),
       );
       return;
     }
@@ -318,10 +324,10 @@ export default function BranchRefillScreen() {
       });
     } catch (e) {
       Alert.alert(
-        'Report not sent',
-        `The transfer was created, but the Telegram report could not be sent.\n\n${
-          e instanceof Error ? e.message : 'Unknown error.'
-        }`,
+        t('refill.reportNotSent'),
+        t('refill.reportNotSentBody', {
+          error: e instanceof Error ? e.message : t('common.unknownError'),
+        }),
       );
     }
   }
@@ -347,8 +353,8 @@ export default function BranchRefillScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={params.branchName || `Branch ${params.branchId}`}
-        subtitle="Refill from daily sales"
+        title={params.branchName || t('home.branchFallback', { id: params.branchId })}
+        subtitle={t('refill.subtitleFrom')}
         onBack={() => router.back()}
       />
 
@@ -359,7 +365,7 @@ export default function BranchRefillScreen() {
           <ThemedView type="backgroundElement" style={styles.routeCard}>
             <View style={styles.routeCol}>
               <ThemedText type="small" themeColor="textSecondary">
-                From
+                {t('filters.from')}
               </ThemedText>
               <ThemedText type="smallBold" numberOfLines={1}>
                 {params.sourceName}
@@ -371,14 +377,14 @@ export default function BranchRefillScreen() {
               onPress={() => setDestSheet(true)}
               hitSlop={Spacing.two}>
               <ThemedText type="small" themeColor="textSecondary">
-                To warehouse
+                {t('refill.toWarehouse')}
               </ThemedText>
               <View style={styles.destValueRow}>
                 <ThemedText
                   type="smallBold"
                   numberOfLines={1}
                   style={[styles.destValue, { color: destination ? theme.text : theme.textSecondary }]}>
-                  {destination?.name ?? 'Select warehouse'}
+                  {destination?.name ?? t('filters.selectWarehouse')}
                 </ThemedText>
                 <Ionicons name="chevron-down" size={16} color={theme.textSecondary} />
               </View>
@@ -390,7 +396,7 @@ export default function BranchRefillScreen() {
               type="small"
               themeColor="textSecondary"
               style={isTablet ? styles.labelTablet : undefined}>
-              BM name (controls the branch)
+              {t('refill.bmLabel')}
             </ThemedText>
             <ThemedView
               type="backgroundElement"
@@ -399,7 +405,7 @@ export default function BranchRefillScreen() {
               <TextInput
                 value={bmName}
                 onChangeText={setBmName}
-                placeholder="Enter BM name for the report"
+                placeholder={t('refill.bmPlaceholder')}
                 placeholderTextColor={theme.textSecondary}
                 autoCapitalize="words"
                 style={[styles.bmInput, isTablet && styles.bmInputTablet, { color: theme.text }]}
@@ -411,12 +417,12 @@ export default function BranchRefillScreen() {
             <ThemedText
               type="smallBold"
               style={[styles.sectionTitle, isTablet && styles.sectionTitleTablet]}>
-              Items to transfer
+              {t('refill.itemsToTransfer')}
             </ThemedText>
             {rows.length > 0 && (
               <Pressable onPress={fillFromSold} hitSlop={Spacing.two}>
                 <ThemedText type="small" style={{ color: BRAND, fontWeight: '700' }}>
-                  Fill from sold
+                  {t('refill.fillFromSold')}
                 </ThemedText>
               </Pressable>
             )}
@@ -426,7 +432,7 @@ export default function BranchRefillScreen() {
             <SkeletonList />
           ) : allRows.length === 0 ? (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No items were sold by this branch on this day. Tap “Add item” to transfer stock manually.'}
+              {error ?? t('refill.emptyItems')}
             </ThemedText>
           ) : (
             // One item per row (single column on phone and tablet) so the full
@@ -446,7 +452,7 @@ export default function BranchRefillScreen() {
               ]}>
               <Ionicons name="add-circle" size={20} color={BRAND} />
               <ThemedText type="smallBold" style={{ color: BRAND }}>
-                Add item
+                {t('refill.addItem')}
               </ThemedText>
             </Pressable>
           )}
@@ -471,7 +477,7 @@ export default function BranchRefillScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <ThemedText style={[styles.submitText, isTablet && styles.submitTextTablet]}>
-                Create Transfer{selectedCount > 0 ? ` (${selectedCount})` : ''}
+                {t('refill.createTransfer')}{selectedCount > 0 ? ` (${selectedCount})` : ''}
               </ThemedText>
             )}
           </Pressable>
@@ -480,7 +486,7 @@ export default function BranchRefillScreen() {
 
       <OptionSheet
         visible={destSheet}
-        title="Destination warehouse"
+        title={t('refill.destWarehouse')}
         options={warehouseOptions.filter((o) => o.id !== params.sourceId).map((o) => o.name)}
         selected={destination?.name}
         onSelect={(value) => {
@@ -522,6 +528,7 @@ function ItemRow({
   theme: ReturnType<typeof useTheme>;
   isTablet: boolean;
 }) {
+  const { t } = useTranslation();
   const entered = parseInt(value, 10) || 0;
   const over = entered > available;
   const stockColor = available <= 0 ? '#e5484d' : theme.textSecondary;
@@ -558,7 +565,7 @@ function ItemRow({
               type="small"
               themeColor="textSecondary"
               style={isTablet ? styles.metaTextTablet : undefined}>
-              Sold {row.qtySold}
+              {t('refill.sold', { n: row.qtySold })}
             </ThemedText>
           </View>
           <View style={styles.metaPill}>
@@ -566,7 +573,7 @@ function ItemRow({
             <ThemedText
               type="small"
               style={[{ color: stockColor }, isTablet && styles.metaTextTablet]}>
-              {stockLoading ? 'Checking…' : `In stock ${available}`}
+              {stockLoading ? t('refill.checking') : t('refill.inStock', { n: available })}
             </ThemedText>
           </View>
         </View>

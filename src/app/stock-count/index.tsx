@@ -23,6 +23,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { SkeletonList } from '@/components/skeleton';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -46,6 +47,7 @@ export default function StockCountListScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branchId = session?.branch.id;
 
   const [status, setStatus] = useState<StatusFilter>('all');
@@ -77,7 +79,7 @@ export default function StockCountListScreen() {
         setTotal(result.total);
       } catch (e) {
         if (id === requestId.current && !append) {
-          setError(e instanceof Error ? e.message : 'Failed to load counts.');
+          setError(e instanceof Error ? e.message : t('count.loadError'));
           setItems([]);
         }
       } finally {
@@ -87,7 +89,7 @@ export default function StockCountListScreen() {
         }
       }
     },
-    [branchId],
+    [branchId, t],
   );
 
   useEffect(() => {
@@ -118,8 +120,8 @@ export default function StockCountListScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="Stock Count"
-        subtitle={`${total} ${total === 1 ? 'count' : 'counts'}`}
+        title={t('settings.row.stockCount')}
+        subtitle={`${total} ${total === 1 ? t('count.unitSingular') : t('count.unitPlural')}`}
         onBack={() => router.back()}
         right={
           <View style={styles.headerActions}>
@@ -133,7 +135,7 @@ export default function StockCountListScreen() {
               onPress={() => router.push('/stock-count/new')}
               style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}>
               <Ionicons name="add" size={20} color="#ffffff" />
-              <ThemedText style={styles.newButtonText}>New</ThemedText>
+              <ThemedText style={styles.newButtonText}>{t('common.new')}</ThemedText>
             </Pressable>
           </View>
         }
@@ -147,7 +149,7 @@ export default function StockCountListScreen() {
           {STATUSES.map((s) => (
             <Chip
               key={s}
-              label={s === 'all' ? 'All' : STATUS_META[s].label}
+              label={s === 'all' ? t('transfers.filterAll') : t(`countStatus.${s}`)}
               color={s === 'all' ? BRAND : STATUS_META[s].color}
               active={status === s}
               onPress={() => setStatus(s)}
@@ -184,7 +186,7 @@ export default function StockCountListScreen() {
             <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No stock counts yet. Tap New to start one.'}
+              {error ?? t('count.empty')}
             </ThemedText>
           )
         }
@@ -239,6 +241,7 @@ function CountCard({
   onPress: () => void;
   theme: ReturnType<typeof useTheme>;
 }) {
+  const { t } = useTranslation();
   const meta = STATUS_META[count.status];
 
   return (
@@ -255,7 +258,7 @@ function CountCard({
               </ThemedText>
               <View style={[styles.badge, { backgroundColor: `${meta.color}22` }]}>
                 <ThemedText style={[styles.badgeText, { color: meta.color }]}>
-                  {meta.label}
+                  {t(`countStatus.${count.status}`)}
                 </ThemedText>
               </View>
             </View>
@@ -390,7 +393,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 18,
     fontWeight: '700',
   },
   inlineRow: {

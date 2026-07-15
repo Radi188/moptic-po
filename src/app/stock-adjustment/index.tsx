@@ -27,6 +27,7 @@ import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
 import { SkeletonList } from "@/components/skeleton";
+import { useTranslation } from "@/contexts/i18n";
 import { useTheme } from "@/hooks/use-theme";
 
 const BRAND = "#232843";
@@ -65,6 +66,7 @@ export default function StockAdjustmentListScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branchId = session?.branch.id;
 
   const [search, setSearch] = useState("");
@@ -113,7 +115,7 @@ export default function StockAdjustmentListScreen() {
       } catch (e) {
         if (id === requestId.current && !append) {
           setError(
-            e instanceof Error ? e.message : "Failed to load adjustments.",
+            e instanceof Error ? e.message : t("adjustment.listLoadError"),
           );
           setItems([]);
         }
@@ -124,7 +126,7 @@ export default function StockAdjustmentListScreen() {
         }
       }
     },
-    [branchId, dateFrom, dateTo],
+    [branchId, dateFrom, dateTo, t],
   );
 
   // Initial load + debounced search. Reloads when returning from the form too.
@@ -187,7 +189,7 @@ export default function StockAdjustmentListScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="Stock Adjustment"
+        title={t("settings.row.stockAdjustment")}
         subtitle={`${total} ${total === 1 ? "record" : "records"}`}
         onBack={() => router.back()}
         right={
@@ -199,7 +201,7 @@ export default function StockAdjustmentListScreen() {
             ]}
           >
             <Ionicons name="add" size={20} color="#ffffff" />
-            <ThemedText style={styles.newButtonText}>New</ThemedText>
+            <ThemedText style={styles.newButtonText}>{t("common.new")}</ThemedText>
           </Pressable>
         }
       />
@@ -210,7 +212,7 @@ export default function StockAdjustmentListScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search item or reference"
+            placeholder={t("adjustment.searchPlaceholder")}
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -233,7 +235,7 @@ export default function StockAdjustmentListScreen() {
             style={({ pressed }) => [styles.dateCol, pressed && styles.pressed]}
           >
             <ThemedText type="small" themeColor="textSecondary">
-              Date From
+              {t("filters.dateFrom")}
             </ThemedText>
             <ThemedView type="backgroundElement" style={styles.selectBox}>
               <Ionicons
@@ -252,7 +254,7 @@ export default function StockAdjustmentListScreen() {
             style={({ pressed }) => [styles.dateCol, pressed && styles.pressed]}
           >
             <ThemedText type="small" themeColor="textSecondary">
-              Date To
+              {t("filters.dateTo")}
             </ThemedText>
             <ThemedView type="backgroundElement" style={styles.selectBox}>
               <Ionicons
@@ -296,15 +298,15 @@ export default function StockAdjustmentListScreen() {
                     hitSlop={Spacing.two}
                   >
                     <ThemedText type="small" themeColor="textSecondary">
-                      Cancel
+                      {t("common.cancel")}
                     </ThemedText>
                   </Pressable>
                   <ThemedText type="smallBold">
-                    {datePicker === "from" ? "Date From" : "Date To"}
+                    {datePicker === "from" ? t("filters.dateFrom") : t("filters.dateTo")}
                   </ThemedText>
                   <Pressable onPress={confirmDate} hitSlop={Spacing.two}>
                     <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                      Done
+                      {t("common.done")}
                     </ThemedText>
                   </Pressable>
                 </View>
@@ -356,7 +358,7 @@ export default function StockAdjustmentListScreen() {
               themeColor="textSecondary"
               style={styles.empty}
             >
-              {error ?? "No stock adjustments yet."}
+              {error ?? t("adjustment.empty")}
             </ThemedText>
           )
         }

@@ -20,6 +20,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
@@ -34,6 +35,7 @@ export default function NewStockCountScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
   const branchId = session?.branch.id;
 
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
@@ -56,7 +58,7 @@ export default function NewStockCountScreen() {
   async function handleStart() {
     if (starting) return;
     if (!warehouse) {
-      setError('Please select a warehouse.');
+      setError(t('adjustment.selectWarehouseErr'));
       return;
     }
     setError(null);
@@ -72,7 +74,7 @@ export default function NewStockCountScreen() {
       // Replace so Back returns to the history list, not this form.
       router.replace({ pathname: '/stock-count/[id]', params: { id: count.id } });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start the count.');
+      setError(e instanceof Error ? e.message : t('count.startError'));
       setStarting(false);
     }
   }
@@ -80,8 +82,8 @@ export default function NewStockCountScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title="New Stock Count"
-        subtitle="Snapshot a warehouse to count"
+        title={t('count.newTitle')}
+        subtitle={t('count.newSubtitle')}
         onBack={() => router.back()}
       />
       <KeyboardAvoidingView
@@ -90,7 +92,7 @@ export default function NewStockCountScreen() {
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <View style={styles.fieldGroup}>
             <ThemedText type="small" themeColor="textSecondary">
-              Warehouse
+              {t('filters.warehouse')}
             </ThemedText>
             <Pressable
               onPress={() => setWarehouseSheet(true)}
@@ -104,7 +106,7 @@ export default function NewStockCountScreen() {
                       styles.selectValue,
                       { color: warehouse ? theme.text : theme.textSecondary },
                     ]}>
-                    {warehouse?.name ?? 'Select warehouse'}
+                    {warehouse?.name ?? t('filters.selectWarehouse')}
                   </ThemedText>
                   <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
                 </View>
@@ -117,9 +119,9 @@ export default function NewStockCountScreen() {
             style={({ pressed }) => pressed && styles.pressed}>
             <ThemedView type="backgroundElement" style={styles.toggleRow}>
               <View style={styles.toggleText}>
-                <ThemedText type="smallBold">In-stock items only</ThemedText>
+                <ThemedText type="smallBold">{t('count.inStockOnly')}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
-                  Skip items the system shows as zero
+                  {t('count.inStockOnlyHint')}
                 </ThemedText>
               </View>
               <Ionicons
@@ -132,13 +134,13 @@ export default function NewStockCountScreen() {
 
           <View style={styles.fieldGroup}>
             <ThemedText type="small" themeColor="textSecondary">
-              Note (optional)
+              {t('count.noteOptional')}
             </ThemedText>
             <ThemedView type="backgroundElement" style={[styles.input, styles.inputMultiline]}>
               <TextInput
                 value={note}
                 onChangeText={setNote}
-                placeholder="e.g. Month-end count"
+                placeholder={t('count.namePlaceholder')}
                 placeholderTextColor={theme.textSecondary}
                 multiline
                 style={[styles.inputText, { color: theme.text }]}
@@ -159,7 +161,7 @@ export default function NewStockCountScreen() {
             {starting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <ThemedText style={styles.startText}>Start Count</ThemedText>
+              <ThemedText style={styles.startText}>{t('count.start')}</ThemedText>
             )}
           </Pressable>
         </ScrollView>
@@ -167,7 +169,7 @@ export default function NewStockCountScreen() {
 
       <OptionSheet
         visible={warehouseSheet}
-        title="Select warehouse"
+        title={t('filters.selectWarehouse')}
         options={warehouseOptions.map((o) => o.name)}
         selected={warehouse?.name}
         onSelect={(value) => {

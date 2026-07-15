@@ -27,8 +27,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { SkeletonList } from '@/components/skeleton';
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
+import type { TranslateFn } from '@/contexts/i18n';
 import {
   formatDateTime,
   STATUS_META,
@@ -36,6 +38,11 @@ import {
   type StockTransfer,
   type TransferStatus,
 } from '@/data/transfers';
+
+/** Localized status label; colors still come from STATUS_META. */
+function statusLabel(t: TranslateFn, status: TransferStatus) {
+  return t(`status.${status}` as const);
+}
 
 const BRAND = '#232843';
 const DONE = '#30A46C';
@@ -66,6 +73,8 @@ export default function TransfersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = useTheme();
+  const { t, language } = useTranslation();
+  const km = language === 'km';
   const { isTablet } = useResponsive();
 
   const [search, setSearch] = useState('');
@@ -102,7 +111,7 @@ export default function TransfersScreen() {
         setTotal(result.total);
       } catch (e) {
         if (id === requestId.current && !append) {
-          setError(e instanceof Error ? e.message : 'Failed to load transfers.');
+          setError(e instanceof Error ? e.message : t('transfers.loadError'));
           setItems([]);
         }
       } finally {
@@ -112,7 +121,7 @@ export default function TransfersScreen() {
         }
       }
     },
-    [],
+    [t],
   );
 
   // Initial load + debounced reload on search/status change.
@@ -162,7 +171,10 @@ export default function TransfersScreen() {
       closeDetail();
       load(search, status, 1, false);
     } catch (e) {
-      Alert.alert('Failed', e instanceof Error ? e.message : 'Could not update the transfer.');
+      Alert.alert(
+        t('transfers.updateFailedTitle'),
+        e instanceof Error ? e.message : t('transfers.updateFailedBody'),
+      );
     }
   }
 
@@ -170,16 +182,23 @@ export default function TransfersScreen() {
     <ThemedView style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
         <View>
-          <ThemedText style={[styles.title, isTablet && styles.titleTablet]}>Stock Transfer</ThemedText>
+          <ThemedText
+            style={[
+              styles.title,
+              isTablet && styles.titleTablet,
+              km && (isTablet ? styles.titleTabletKm : styles.titleKm),
+            ]}>
+            {t('transfers.title')}
+          </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {total} transfers
+            {t('transfers.count', { count: total })}
           </ThemedText>
         </View>
         <Pressable
           onPress={newTransfer}
           style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}>
           <Ionicons name="add" size={20} color="#ffffff" />
-          <ThemedText style={styles.newButtonText}>New</ThemedText>
+          <ThemedText style={styles.newButtonText}>{t('common.new')}</ThemedText>
         </Pressable>
       </View>
 
@@ -189,7 +208,7 @@ export default function TransfersScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search reference or warehouse"
+            placeholder={t('transfers.searchPlaceholder')}
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -207,7 +226,7 @@ export default function TransfersScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chips}>
           <FilterChip
-            label="All"
+            label={t('transfers.filterAll')}
             color={BRAND}
             active={status === 'all'}
             onPress={() => setStatus('all')}
@@ -217,7 +236,7 @@ export default function TransfersScreen() {
           {TRANSFER_STATUSES.map((s) => (
             <FilterChip
               key={s}
-              label={STATUS_META[s].label}
+              label={statusLabel(t, s)}
               color={STATUS_META[s].color}
               active={status === s}
               onPress={() => setStatus(s)}
@@ -260,7 +279,7 @@ export default function TransfersScreen() {
             <SkeletonList />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? 'No stock transfers match your filters.'}
+              {error ?? t('transfers.empty')}
             </ThemedText>
           )
         }
@@ -334,6 +353,7 @@ function TransferCard({
   onLongPress?: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const statusColor = STATUS_META[transfer.status].color;
   const itemCount = transfer.itemsCount ?? transfer.items.length;
   const done = isRefilledToday(transfer);
@@ -356,7 +376,7 @@ function TransferCard({
                   name="checkmark-circle"
                   size={18}
                   color={DONE}
-                  accessibilityLabel="Already refilled today"
+                  accessibilityLabel={t('transfers.alreadyRefilled')}
                 />
               )}
               <ThemedText type="smallBold" numberOfLines={1} style={styles.refText}>
@@ -365,7 +385,7 @@ function TransferCard({
               <View style={[styles.levelBadge, { backgroundColor: `${statusColor}22` }]}>
                 <View style={[styles.dot, { backgroundColor: statusColor }]} />
                 <ThemedText style={[styles.badgeText, { color: statusColor }]}>
-                  {STATUS_META[transfer.status].label}
+                  {statusLabel(t, transfer.status)}
                 </ThemedText>
               </View>
             </View>
@@ -391,7 +411,7 @@ function TransferCard({
           <View style={styles.inlineRow}>
             <Ionicons name="cube-outline" size={13} color={theme.textSecondary} />
             <ThemedText type="small" themeColor="textSecondary">
-              {itemCount} {itemCount === 1 ? 'item' : 'items'}
+              {itemCount} {itemCount === 1 ? t('common.item') : t('common.items')}
             </ThemedText>
           </View>
         </View>
@@ -420,6 +440,13 @@ const styles = StyleSheet.create({
   titleTablet: {
     fontSize: 32,
     lineHeight: 40,
+  },
+  // Khmer titles need more line height so tall stacked glyphs don't clip.
+  titleKm: {
+    lineHeight: 42,
+  },
+  titleTabletKm: {
+    lineHeight: 50,
   },
   newButton: {
     flexDirection: 'row',
@@ -471,7 +498,7 @@ const styles = StyleSheet.create({
   },
   chipTextTablet: {
     fontSize: 18,
-    lineHeight: 24,
+    lineHeight: 28,
   },
   chipActiveText: {
     color: '#ffffff',
@@ -550,7 +577,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 18,
     fontWeight: '700',
   },
   dot: {

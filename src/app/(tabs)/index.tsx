@@ -21,9 +21,11 @@ import { ThemedView } from "@/components/themed-view";
 import type { Branch } from "@/constants/branches";
 import { BottomTabInset, MaxContentWidth, Spacing } from "@/constants/theme";
 import { useAuth } from "@/contexts/auth";
+import { useTranslation } from "@/contexts/i18n";
 import type { DashboardData, LowStockItem } from "@/data/dashboard";
 import { useResponsive } from "@/hooks/use-responsive";
 import { useTheme } from "@/hooks/use-theme";
+import type { TranslationKey } from "@/i18n/translations";
 
 /** The single primary brand color used across the whole dashboard. */
 const BRAND = "#232843";
@@ -49,7 +51,7 @@ function yesterday() {
 
 type QuickAction = {
   key: string;
-  label: string;
+  labelKey: TranslationKey;
   icon: string;
   href: Href;
 };
@@ -57,25 +59,25 @@ type QuickAction = {
 const QUICK_ACTIONS: QuickAction[] = [
   {
     key: "count",
-    label: "Stock Count",
+    labelKey: "home.quickAction.count",
     icon: "list-outline",
     href: "/stock-count",
   },
   {
     key: "adjust",
-    label: "Adjustment",
+    labelKey: "home.quickAction.adjust",
     icon: "create-outline",
     href: "/stock-adjustment",
   },
   {
     key: "transfer",
-    label: "Transfer",
+    labelKey: "home.quickAction.transfer",
     icon: "swap-horizontal-outline",
     href: "/transfers",
   },
   {
     key: "on-hand",
-    label: "On Hand",
+    labelKey: "home.quickAction.onHand",
     icon: "cube-outline",
     href: "/stock-on-hand",
   },
@@ -85,6 +87,7 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const theme = useTheme();
   const router = useRouter();
+  const { t } = useTranslation();
   const { isTablet } = useResponsive();
   const branchId = session?.branch.id ?? "";
   const branches = session?.branches ?? EMPTY_BRANCHES;
@@ -124,9 +127,9 @@ export default function HomeScreen() {
     try {
       setData(await fetchStockDashboard(branchId));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load dashboard.");
+      setError(e instanceof Error ? e.message : t("home.loadError"));
     }
-  }, [branchId]);
+  }, [branchId, t]);
 
   // Yesterday's sales per branch, to surface which branches need a refill.
   const loadRefill = useCallback(async () => {
@@ -170,13 +173,15 @@ export default function HomeScreen() {
     const summary = refillSales[branch.id];
     const sold = summary && summary.itemCount > 0;
     if (!sold) {
+      const branchLabel =
+        branch.name || t("home.branchFallback", { id: branch.id });
       Alert.alert(
-        "No sales yesterday",
-        `${branch.name || `Branch ${branch.id}`} had no sales yesterday. Please create a stock transfer instead.`,
+        t("home.noSalesTitle"),
+        t("home.noSalesBody", { branch: branchLabel }),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Create transfer",
+            text: t("home.createTransfer"),
             onPress: () =>
               router.push({ pathname: "/transfer/[id]", params: { id: "new" } }),
           },
@@ -220,8 +225,9 @@ export default function HomeScreen() {
         }
       >
         <ThemedText type="small" themeColor="textSecondary">
-          Welcome back{session ? `, ${session.username}` : ""} — here&apos;s
-          today&apos;s overview.
+          {session
+            ? t("home.welcomeNamed", { name: session.username })
+            : t("home.welcome")}
         </ThemedText>
 
         <RefillHero />
@@ -253,7 +259,7 @@ export default function HomeScreen() {
               </View>
             )}
 
-            <SectionHeader title="Quick actions" />
+            <SectionHeader title={t("home.quickActions")} />
             <View style={styles.quickActions}>
               {QUICK_ACTIONS.map((action) => (
                 <QuickActionButton key={action.key} action={action} />
@@ -262,12 +268,18 @@ export default function HomeScreen() {
 
             <View style={[styles.bottomRow, isTablet && styles.bottomRowTablet]}>
               <View style={[styles.bottomCol, isTablet && styles.bottomColTablet]}>
-                <SectionHeader title="Low stock alerts" actionLabel="See all" />
+                <SectionHeader
+                  title={t("home.lowStock.title")}
+                  actionLabel={t("home.seeAll")}
+                />
                 <ThemedView type="backgroundElement" style={styles.list}>
                   {loading || !data ? (
                     <SkeletonRows count={3} />
                   ) : data.lowStock.length === 0 ? (
-                    <EmptyRow icon="checkmark-circle-outline" text="No low stock alerts." />
+                    <EmptyRow
+                      icon="checkmark-circle-outline"
+                      text={t("home.lowStock.empty")}
+                    />
                   ) : (
                     data.lowStock.map((item, index) => (
                       <LowStockRow key={item.id} item={item} divider={index > 0} />
@@ -277,14 +289,17 @@ export default function HomeScreen() {
               </View>
 
               <View style={[styles.bottomCol, isTablet && styles.bottomColTablet]}>
-                <SectionHeader title="Branches to refill" actionLabel="See all" />
+                <SectionHeader
+                  title={t("home.refill.title")}
+                  actionLabel={t("home.seeAll")}
+                />
                 <ThemedView type="backgroundElement" style={styles.list}>
                   {loading ? (
                     <SkeletonRows count={3} />
                   ) : branches.length === 0 ? (
                     <EmptyRow
                       icon="storefront-outline"
-                      text="No branches available."
+                      text={t("home.refill.empty")}
                     />
                   ) : (
                     branches.map((branch, index) => (
@@ -311,19 +326,23 @@ export default function HomeScreen() {
 /** Prominent primary CTA for the stock user's main daily task. */
 function RefillHero() {
   const router = useRouter();
+  const { t, language } = useTranslation();
+  const km = language === "km";
   return (
     <Pressable
       onPress={() => router.push("/stock-refill")}
-      accessibilityLabel="Stock Refill"
+      accessibilityLabel={t("home.refillHero.title")}
       style={({ pressed }) => [styles.hero, pressed && styles.pressed]}
     >
       <View style={styles.heroIcon}>
         <Ionicons name="repeat-outline" size={26} color="#ffffff" />
       </View>
       <View style={styles.heroText}>
-        <ThemedText style={styles.heroTitle}>Stock Refill</ThemedText>
+        <ThemedText style={[styles.heroTitle, km && styles.heroTitleKm]}>
+          {t("home.refillHero.title")}
+        </ThemedText>
         <ThemedText style={styles.heroSubtitle} numberOfLines={1}>
-          Refill branches by daily sales
+          {t("home.refillHero.subtitle")}
         </ThemedText>
       </View>
       <Ionicons name="chevron-forward" size={22} color="#ffffff" />
@@ -334,18 +353,19 @@ function RefillHero() {
 function QuickActionButton({ action }: { action: QuickAction }) {
   const router = useRouter();
   const theme = useTheme();
+  const { t } = useTranslation();
   const iconName = action.icon as React.ComponentProps<typeof Ionicons>["name"];
   return (
     <Pressable
       onPress={() => router.push(action.href)}
-      accessibilityLabel={action.label}
+      accessibilityLabel={t(action.labelKey)}
       style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}
     >
       <View style={[styles.quickIcon, { backgroundColor: theme.tintSoft }]}>
         <Ionicons name={iconName} size={24} color={theme.tint} />
       </View>
       <ThemedText type="small" numberOfLines={2} style={styles.quickLabel}>
-        {action.label}
+        {t(action.labelKey)}
       </ThemedText>
     </Pressable>
   );
@@ -399,6 +419,7 @@ function LowStockRow({
   divider: boolean;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   return (
     <View
       style={[
@@ -418,9 +439,11 @@ function LowStockRow({
         </ThemedText>
       </View>
       <View style={styles.rowRight}>
-        <ThemedText type="smallBold">{item.qty} left</ThemedText>
+        <ThemedText type="smallBold">
+          {t("home.qtyLeft", { qty: item.qty })}
+        </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
-          min {item.reorderLevel}
+          {t("home.minLevel", { level: item.reorderLevel })}
         </ThemedText>
       </View>
     </View>
@@ -441,11 +464,13 @@ function RefillRow({
   onPress: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const sold = summary && summary.itemCount > 0;
+  const branchLabel = branch.name || t("home.branchFallback", { id: branch.id });
   return (
     <Pressable
       onPress={onPress}
-      accessibilityLabel={`Refill ${branch.name}`}
+      accessibilityLabel={t("home.refillAccessibility", { branch: branchLabel })}
       style={({ pressed }) => [
         styles.row,
         divider && { borderTopColor: theme.background, borderTopWidth: 1 },
@@ -457,20 +482,26 @@ function RefillRow({
       </View>
       <View style={styles.rowText}>
         <ThemedText type="smallBold" numberOfLines={1}>
-          {branch.name || `Branch ${branch.id}`}
+          {branchLabel}
         </ThemedText>
         {loading && !summary ? (
           <ThemedText type="small" themeColor="textSecondary">
-            Loading sales…
+            {t("home.loadingSales")}
           </ThemedText>
         ) : sold ? (
           <ThemedText type="small" themeColor="textSecondary">
-            {summary!.itemCount} {summary!.itemCount === 1 ? "item" : "items"} ·{" "}
-            {summary!.totalQty} sold yesterday
+            {t("home.soldYesterday", {
+              count: summary!.itemCount,
+              unit:
+                summary!.itemCount === 1
+                  ? t("home.itemSingular")
+                  : t("home.itemPlural"),
+              qty: summary!.totalQty,
+            })}
           </ThemedText>
         ) : (
           <ThemedText type="small" themeColor="textSecondary">
-            No sales yesterday
+            {t("home.noSalesYesterday")}
           </ThemedText>
         )}
       </View>
@@ -520,6 +551,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 22,
     fontWeight: "700",
+  },
+  // Khmer stacks glyphs taller than Latin; give the title room so it isn't clipped.
+  heroTitleKm: {
+    lineHeight: 28,
   },
   heroSubtitle: {
     color: "rgba(255,255,255,0.75)",

@@ -25,6 +25,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import {
   addTransfer,
@@ -49,6 +50,7 @@ export default function TransferFormScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
+  const { t } = useTranslation();
 
   const isNew = id === 'new';
   const existing = useMemo(() => (isNew ? undefined : getTransfer(id)), [id, isNew]);
@@ -85,9 +87,9 @@ export default function TransferFormScreen() {
   if (!isNew && !existing) {
     return (
       <ThemedView style={styles.container}>
-        <ScreenHeader title="Not found" onBack={() => router.back()} />
+        <ScreenHeader title={t('common.notFound')} onBack={() => router.back()} />
         <View style={styles.centered}>
-          <ThemedText themeColor="textSecondary">This transfer no longer exists.</ThemedText>
+          <ThemedText themeColor="textSecondary">{t('transferForm.notFoundBody')}</ThemedText>
         </View>
       </ThemedView>
     );
@@ -139,19 +141,19 @@ export default function TransferFormScreen() {
   async function handleSave() {
     if (submitting) return;
     if (!fromWarehouse) {
-      setError('Please select the source warehouse.');
+      setError(t('transferForm.selectSource'));
       return;
     }
     if (!toWarehouse) {
-      setError('Please select the destination warehouse.');
+      setError(t('transferForm.selectDest'));
       return;
     }
     if (fromWarehouse === toWarehouse) {
-      setError('From and To warehouses must be different.');
+      setError(t('transferForm.sameWarehouse'));
       return;
     }
     if (items.length === 0) {
-      setError('Add at least one item.');
+      setError(t('transferForm.addItem'));
       return;
     }
 
@@ -198,7 +200,7 @@ export default function TransferFormScreen() {
       await createTransfer(body);
       router.back();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create transfer.');
+      setError(e instanceof Error ? e.message : t('transferForm.createError'));
     } finally {
       setSubmitting(false);
     }
@@ -209,12 +211,12 @@ export default function TransferFormScreen() {
       <ThemedView style={styles.container}>
         <ScreenHeader
           title={existing.reference}
-          subtitle="View only"
+          subtitle={t('common.viewOnly')}
           onBack={() => router.back()}
         />
         <ScrollView contentContainerStyle={styles.body}>
           <ThemedText type="small" themeColor="textSecondary">
-            This transfer is {existing.status} and can&apos;t be edited.
+            {t('transferDetails.statusNote', { status: t(`status.${existing.status}`) })}
           </ThemedText>
         </ScrollView>
       </ThemedView>
@@ -222,16 +224,16 @@ export default function TransferFormScreen() {
   }
 
   const fromTo = {
-    from: { title: 'From warehouse', value: fromWarehouse, set: setFromWarehouse },
-    to: { title: 'To warehouse', value: toWarehouse, set: setToWarehouse },
+    from: { title: t('transferForm.selectFromTitle'), value: fromWarehouse, set: setFromWarehouse },
+    to: { title: t('transferForm.selectToTitle'), value: toWarehouse, set: setToWarehouse },
   };
   const activeSheet = sheet ? fromTo[sheet] : null;
 
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={isNew ? 'Stock Transfer' : existing!.reference}
-        subtitle={isNew ? 'New transfer' : 'Edit transfer'}
+        title={isNew ? t('transfers.title') : existing!.reference}
+        subtitle={isNew ? t('transferForm.newTitle') : t('transferForm.editTitle')}
         onBack={() => router.back()}
       />
       <KeyboardAvoidingView
@@ -239,24 +241,24 @@ export default function TransferFormScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           <SelectField
-            label="From Warehouse"
+            label={t('transferDetails.fromWarehouse')}
             value={fromWarehouse}
-            placeholder="Please select warehouse"
+            placeholder={t('adjustment.selectWarehousePlaceholder')}
             icon="exit-outline"
             onPress={() => setSheet('from')}
             theme={theme}
           />
           <SelectField
-            label="To Warehouse"
+            label={t('transferDetails.toWarehouse')}
             value={toWarehouse}
-            placeholder="Please select warehouse"
+            placeholder={t('adjustment.selectWarehousePlaceholder')}
             icon="enter-outline"
             onPress={() => setSheet('to')}
             theme={theme}
           />
 
           <SelectField
-            label="Transaction Date"
+            label={t('field.transactionDate')}
             value={formatDate(date.toISOString())}
             icon="calendar-outline"
             onPress={() => setShowDate(true)}
@@ -268,13 +270,13 @@ export default function TransferFormScreen() {
 
           <View style={styles.fieldGroup}>
             <ThemedText type="small" themeColor="textSecondary">
-              Description
+              {t('field.description')}
             </ThemedText>
             <ThemedView type="backgroundElement" style={[styles.input, styles.inputMultiline]}>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Description"
+                placeholder={t('field.description')}
                 placeholderTextColor={theme.textSecondary}
                 multiline
                 style={[styles.inputText, { color: theme.text }]}
@@ -286,15 +288,15 @@ export default function TransferFormScreen() {
             onPress={() => setItemSheet(true)}
             style={({ pressed }) => [styles.chooseButton, pressed && styles.pressed]}>
             <Ionicons name="search" size={18} color="#ffffff" />
-            <ThemedText style={styles.chooseButtonText}>Choose Items</ThemedText>
+            <ThemedText style={styles.chooseButtonText}>{t('itemPicker.title')}</ThemedText>
           </Pressable>
 
           <View style={styles.selectedHeader}>
             <ThemedText type="smallBold" style={styles.selectedTitle}>
-              Selected Items
+              {t('form.selectedItems')}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {items.length} {items.length === 1 ? 'item' : 'items'}
+              {items.length} {items.length === 1 ? t('common.item') : t('common.items')}
             </ThemedText>
           </View>
 
@@ -302,7 +304,7 @@ export default function TransferFormScreen() {
             <ThemedView type="backgroundElement" style={styles.emptyCard}>
               <Ionicons name="cube-outline" size={32} color={theme.textSecondary} />
               <ThemedText type="small" themeColor="textSecondary">
-                No items selected yet.
+                {t('form.noItemsSelected')}
               </ThemedText>
             </ThemedView>
           ) : (
@@ -335,7 +337,7 @@ export default function TransferFormScreen() {
               <ActivityIndicator color="#ffffff" />
             ) : (
               <ThemedText style={styles.saveButtonText}>
-                {isNew ? 'Save' : 'Save changes'}
+                {isNew ? t('common.save') : t('common.saveChanges')}
               </ThemedText>
             )}
           </Pressable>

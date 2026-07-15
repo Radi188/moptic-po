@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMoney } from '@/data/purchase-orders';
 
@@ -30,6 +31,7 @@ export function ItemPickerSheet<T extends PickerProduct>({
 }: Props<T>) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [search, setSearch] = useState('');
 
   const results = useMemo(() => {
@@ -48,11 +50,11 @@ export function ItemPickerSheet<T extends PickerProduct>({
           <ThemedView style={styles.handle} type="backgroundSelected" />
           <View style={styles.titleRow}>
             <ThemedText type="subtitle" style={styles.title}>
-              Choose Items
+              {t('itemPicker.title')}
             </ThemedText>
             <Pressable onPress={onClose} hitSlop={Spacing.two}>
               <ThemedText type="smallBold" style={{ color: theme.tint }}>
-                Done
+                {t('common.done')}
               </ThemedText>
             </Pressable>
           </View>
@@ -62,7 +64,7 @@ export function ItemPickerSheet<T extends PickerProduct>({
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Search item code or name"
+              placeholder={t('itemPicker.searchPlaceholder')}
               placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}

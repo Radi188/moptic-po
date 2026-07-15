@@ -12,6 +12,8 @@ export type StockOnHandItem = {
   cost: number;
   price: number;
   value: number;
+  reorderLevel: number;
+  isLowStock: boolean;
 };
 
 export type StockOnHandPage = {
@@ -59,6 +61,11 @@ type RawItem = {
   price?: string | number;
   stock_value?: string | number;
   total_cost?: string | number;
+  alert_stock?: string | number;
+  alert_qty?: string | number;
+  reorder_level?: string | number;
+  min_qty?: string | number;
+  is_low_stock?: boolean | string | number;
 };
 
 type RawPage =
@@ -112,6 +119,8 @@ function mapItem(row: RawItem): StockOnHandItem {
     cost,
     price: num(row.sale_price ?? row.selling_price ?? row.price),
     value: num(row.stock_value ?? row.total_cost) || cost * qty,
+    reorderLevel: num(row.alert_stock ?? row.alert_qty ?? row.reorder_level ?? row.min_qty),
+    isLowStock: row.is_low_stock === true || row.is_low_stock === 1 || row.is_low_stock === '1',
   };
 }
 
@@ -146,6 +155,8 @@ export type StockOnHandQuery = {
   branchId?: string;
   /** Only items with stock on hand (in_stock=1). */
   inStock?: boolean;
+  /** Only items at or below their reorder level (low_stock=1). */
+  lowStock?: boolean;
 };
 
 /** GET /stock-on-hand — paginated stock-on-hand list. */
@@ -157,6 +168,7 @@ export async function fetchStockOnHand({
   categoryId,
   branchId,
   inStock,
+  lowStock,
 }: StockOnHandQuery): Promise<StockOnHandPage> {
   const { data } = await api.get<RawPage>('/stock-on-hand', {
     params: {
@@ -167,6 +179,7 @@ export async function fetchStockOnHand({
       category_id: categoryId || undefined,
       branch_login_id: branchId || undefined,
       in_stock: inStock ? 1 : undefined,
+      low_stock: lowStock ? 1 : undefined,
     },
   });
   return mapPage(data);
@@ -208,6 +221,48 @@ export async function fetchWarehouseStockMap(
     for (const pg of results) if (pg) add(pg.items);
   }
   return map;
+}
+
+export type ItemWarehouseStock = {
+  warehouseId: string;
+  warehouseName: string;
+  qty: number;
+};
+
+/**
+ * On-hand quantity of a single item in each warehouse. Reuses the warehouse-
+ * scoped list query (one request per warehouse, matched back to the item by id),
+ * batched to stay within the backend's rate limit. Warehouses with no matching
+ * row report a qty of 0.
+ */
+export async function fetchItemWarehouseStock(
+  item: { id: string; code: string },
+  warehouses: { id: string; name: string }[],
+  branchId?: string,
+): Promise<ItemWarehouseStock[]> {
+  const CONCURRENCY = 3;
+  const out: ItemWarehouseStock[] = [];
+  for (let i = 0; i < warehouses.length; i += CONCURRENCY) {
+    const batch = warehouses.slice(i, i + CONCURRENCY);
+    const rows = await Promise.all(
+      batch.map((w) =>
+        fetchStockOnHand({
+          page: 1,
+          perPage: 100,
+          search: item.code,
+          warehouseId: w.id,
+          branchId,
+        })
+          .then((p) => {
+            const match = p.items.find((it) => it.id === item.id);
+            return { warehouseId: w.id, warehouseName: w.name, qty: match?.qty ?? 0 };
+          })
+          .catch(() => ({ warehouseId: w.id, warehouseName: w.name, qty: 0 })),
+      ),
+    );
+    out.push(...rows);
+  }
+  return out;
 }
 
 /** GET /stock-on-hand/summary — totals for the stat cards. */

@@ -1,6 +1,7 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
 import { Fonts, ThemeColor } from '@/constants/theme';
+import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -15,10 +16,16 @@ const androidNoFontPadding =
 export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
   const { isTablet } = useResponsive();
+  const { language } = useTranslation();
   // On tablets every text type steps up ~20% (font size and line height scale
   // together, so tall scripts like Khmer never clip). An explicit `style`
   // override still wins because it's applied last.
   const t = isTablet ? tabletStyles : styles;
+  // Khmer stacks subscript consonants and diacritics below the baseline, so it
+  // needs more vertical room than Latin or it clips and sits off-center next to
+  // icons. When Khmer is active, override just the lineHeight per type; English
+  // keeps its tighter, purpose-tuned spacing.
+  const km = language === 'km' ? (isTablet ? khmerTabletLineHeights : khmerLineHeights) : null;
 
   return (
     <Text
@@ -36,6 +43,9 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         type === 'link' && t.link,
         type === 'linkPrimary' && t.linkPrimary,
         type === 'code' && t.code,
+        // Applied after the type style so its lineHeight wins, but before the
+        // caller's `style` so explicit overrides still take precedence.
+        km && km[type],
         style,
       ]}
       {...rest}
@@ -128,3 +138,30 @@ const tabletStyles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+type TextType = NonNullable<ThemedTextProps['type']>;
+
+// Khmer-only lineHeight overrides (~1.6–1.7× the font size) so stacked glyphs
+// get vertical room and stay centered against adjacent icons. Font sizes are
+// unchanged — only the line box grows.
+const khmerLineHeights: Record<TextType, { lineHeight: number }> = {
+  small: { lineHeight: 24 },
+  smallBold: { lineHeight: 24 },
+  default: { lineHeight: 27 },
+  title: { lineHeight: 64 },
+  subtitle: { lineHeight: 48 },
+  link: { lineHeight: 30 },
+  linkPrimary: { lineHeight: 30 },
+  code: { lineHeight: 20 },
+};
+
+const khmerTabletLineHeights: Record<TextType, { lineHeight: number }> = {
+  small: { lineHeight: 28 },
+  smallBold: { lineHeight: 28 },
+  default: { lineHeight: 32 },
+  title: { lineHeight: 74 },
+  subtitle: { lineHeight: 56 },
+  link: { lineHeight: 34 },
+  linkPrimary: { lineHeight: 34 },
+  code: { lineHeight: 22 },
+};
