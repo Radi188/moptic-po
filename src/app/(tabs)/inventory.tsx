@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -13,7 +14,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
-import { fetchInventory } from "@/api/inventory";
+import { fetchAllInventory, fetchInventory } from "@/api/inventory";
+import { ExportInventorySheet } from "@/components/export-inventory-sheet";
 import { ListLoadingOverlay } from "@/components/list-loading-overlay";
 import { ProductDetailsSheet } from "@/components/product-details-sheet";
 import { SkeletonList } from "@/components/skeleton";
@@ -28,6 +30,12 @@ import {
 } from "@/data/inventory";
 import { useResponsive } from "@/hooks/use-responsive";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  exportInventory,
+  type ExportFormat,
+  type ExportLabels,
+  type ExportLayout,
+} from "@/lib/inventory-export";
 
 const BRAND = "#232843";
 
@@ -49,7 +57,71 @@ export default function InventoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<InventoryProduct | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const requestId = useRef(0);
+
+  // Build the localized labels baked into the exported document.
+  const exportLabels = useCallback(
+    (): ExportLabels => ({
+      documentTitle: t("doc.title"),
+      countTitle: t("doc.countTitle"),
+      generated: t("doc.generated"),
+      totalItems: t("doc.totalItems"),
+      totalStock: t("doc.totalStock"),
+      totalValue: t("doc.totalValue"),
+      colNo: t("doc.colNo"),
+      colCode: t("doc.colCode"),
+      colName: t("doc.colName"),
+      colCategory: t("doc.colCategory"),
+      colBrand: t("doc.colBrand"),
+      colStock: t("doc.colStock"),
+      colPrice: t("doc.colPrice"),
+      colValue: t("doc.colValue"),
+      colCount: t("doc.colCount"),
+      countedBy: t("doc.countedBy"),
+      colorBlack: t("doc.colorBlack"),
+      colorRed: t("doc.colorRed"),
+      colorBlue: t("doc.colorBlue"),
+      subtotal: t("doc.subtotal"),
+      grandTotal: t("doc.grandTotal"),
+      uncategorized: t("common.uncategorized"),
+      branch: t("doc.branch"),
+      item: t("common.item"),
+      items: t("common.items"),
+    }),
+    [t],
+  );
+
+  // Fetch the full (search-filtered) catalog, build the document and share it.
+  const handleExport = useCallback(
+    async (
+      format: ExportFormat,
+      layout: ExportLayout,
+      branchLabel: string | undefined,
+    ) => {
+      try {
+        const all = await fetchAllInventory({ search });
+        if (all.length === 0) {
+          Alert.alert(t("inventory.export"), t("export.emptyError"));
+          return;
+        }
+        const shared = await exportInventory(all, {
+          format,
+          layout,
+          labels: exportLabels(),
+          branchLabel,
+        });
+        if (!shared) {
+          Alert.alert(t("inventory.export"), t("export.unavailable"));
+          return;
+        }
+        setExportOpen(false);
+      } catch {
+        Alert.alert(t("inventory.export"), t("export.failed"));
+      }
+    },
+    [search, exportLabels, t],
+  );
 
   const load = useCallback(
     async (q: string, nextPage: number, append: boolean, reset = false) => {
@@ -155,13 +227,27 @@ export default function InventoryScreen() {
             {t("inventory.productCount", { count: total })}
           </ThemedText>
         </View>
-        <Pressable
-          onPress={newProduct}
-          style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="add" size={20} color="#ffffff" />
-          <ThemedText style={styles.newButtonText}>{t("inventory.new")}</ThemedText>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            onPress={() => setExportOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t("inventory.export")}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <ThemedView type="backgroundElement" style={styles.iconButton}>
+              <Ionicons name="share-outline" size={20} color={theme.tint} />
+            </ThemedView>
+          </Pressable>
+          <Pressable
+            onPress={newProduct}
+            style={({ pressed }) => [styles.newButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="add" size={20} color="#ffffff" />
+            <ThemedText style={styles.newButtonText}>
+              {t("inventory.new")}
+            </ThemedText>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.controls}>
@@ -242,6 +328,12 @@ export default function InventoryScreen() {
         onClose={() => setSelected(null)}
         onEdit={editProduct}
         onDelete={removeProduct}
+      />
+
+      <ExportInventorySheet
+        visible={exportOpen}
+        onClose={() => setExportOpen(false)}
+        onExport={handleExport}
       />
 
       <ListLoadingOverlay visible={loading && items.length > 0} />
@@ -348,6 +440,18 @@ const styles = StyleSheet.create({
   },
   titleTabletKm: {
     lineHeight: 50,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.two,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: Spacing.five,
+    alignItems: "center",
+    justifyContent: "center",
   },
   newButton: {
     flexDirection: "row",

@@ -16,9 +16,19 @@ type Props = {
   selectedId?: string;
   onSelect: (branch: Branch) => void;
   onClose: () => void;
+  /** Show an "All branches" row at the top; fires `onSelectAll` when tapped. */
+  allowAll?: boolean;
+  onSelectAll?: () => void;
 };
 
-export function BranchPickerSheet({ visible, selectedId, onSelect, onClose }: Props) {
+export function BranchPickerSheet({
+  visible,
+  selectedId,
+  onSelect,
+  onClose,
+  allowAll,
+  onSelectAll,
+}: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { session } = useAuth();
@@ -35,6 +45,27 @@ export function BranchPickerSheet({ visible, selectedId, onSelect, onClose }: Pr
             {t('branchPicker.title')}
           </ThemedText>
           <ScrollView bounces={false}>
+            {allowAll && (
+              <Pressable
+                onPress={onSelectAll}
+                style={({ pressed }) => pressed && styles.pressed}>
+                <ThemedView
+                  type={selectedId == null ? 'backgroundSelected' : 'backgroundElement'}
+                  style={styles.option}>
+                  <Ionicons
+                    name="albums-outline"
+                    size={22}
+                    color={selectedId == null ? theme.tint : theme.textSecondary}
+                  />
+                  <ThemedView style={styles.optionText}>
+                    <ThemedText type="smallBold">{t('filters.allBranches')}</ThemedText>
+                  </ThemedView>
+                  {selectedId == null && (
+                    <Ionicons name="checkmark-circle" size={22} color={theme.tint} />
+                  )}
+                </ThemedView>
+              </Pressable>
+            )}
             {branches.map((item) => (
               <BranchOption
                 key={item.id}

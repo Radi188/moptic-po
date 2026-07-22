@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { isApiConfigured } from "@/api/config";
 import {
   listProducts,
@@ -188,4 +188,73 @@ export async function fetchInventory({
   const result = mapPage(data);
 
   return result;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Number of rows requested per export page. Kept large so the full catalog
+ * comes back in one (or very few) requests instead of dozens of small pages —
+ * many small requests trip the backend rate limiter ("Too Many Attempts", 429).
+ */
+const EXPORT_PAGE_SIZE = 1000;
+
+/** Fetch one export page, retrying with backoff when the server throttles. */
+async function fetchExportPage(
+  page: number,
+  perPage: number,
+  term: string,
+): Promise<InventoryPage> {
+  const params: Record<string, string | number> = { page, per_page: perPage };
+  if (term) params.search = term;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const { data } = await api.get<RawPage>("/items", { params });
+      return mapPage(data);
+    } catch (e) {
+      // Back off and retry on rate-limit / temporary-unavailable responses.
+      const status = e instanceof ApiError ? e.status : 0;
+      if ((status === 429 || status === 503) && attempt < 3) {
+        await sleep(1200 * (attempt + 1));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+/**
+ * Fetch EVERY matching inventory row for the export flow. Uses a large page
+ * size so it usually completes in a single request; if the backend still
+ * paginates, it walks the remaining pages gently (paced + throttle-aware) so it
+ * never fires the burst of small requests that trips the rate limiter.
+ */
+export async function fetchAllInventory({
+  search = "",
+  pageSize = EXPORT_PAGE_SIZE,
+  onProgress,
+}: {
+  search?: string;
+  pageSize?: number;
+  onProgress?: (loaded: number, total: number) => void;
+} = {}): Promise<InventoryProduct[]> {
+  if (!isApiConfigured()) {
+    return listProducts({ page: 1, search, pageSize: 100000 }).items;
+  }
+  const term = search.trim();
+  const all: InventoryProduct[] = [];
+  const MAX_PAGES = 50;
+  let page = 1;
+  let lastPage = 1;
+  do {
+    const result = await fetchExportPage(page, pageSize, term);
+    all.push(...result.items);
+    lastPage = result.lastPage;
+    onProgress?.(all.length, result.total || all.length);
+    if (result.items.length === 0) break;
+    page += 1;
+    // Pace successive pages to stay under the rate limiter's window.
+    if (page <= lastPage) await sleep(300);
+  } while (page <= lastPage && page <= MAX_PAGES);
+  return all;
 }
