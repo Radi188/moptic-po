@@ -155,6 +155,24 @@ export default function PurchaseOrderFormScreen() {
     );
   }
 
+  // Typing a qty directly: keep whatever digits were entered (even a momentary
+  // 0 while the user is clearing the field to type a new value) and only
+  // clamp back up to 1 on blur, so backspacing doesn't fight the input.
+  function setQtyText(itemId: string, text: string) {
+    const digits = text.replace(/[^0-9]/g, '');
+    setItems((current) =>
+      current.map((item) =>
+        item.id === itemId ? { ...item, qty: digits === '' ? 0 : parseInt(digits, 10) } : item,
+      ),
+    );
+  }
+
+  function clampQty(itemId: string) {
+    setItems((current) =>
+      current.map((item) => (item.id === itemId && item.qty < 1 ? { ...item, qty: 1 } : item)),
+    );
+  }
+
   function removeItem(itemId: string) {
     setItems((current) => current.filter((item) => item.id !== itemId));
   }
@@ -367,6 +385,8 @@ export default function PurchaseOrderFormScreen() {
                   theme={theme}
                   onIncrement={() => changeQty(item.id, 1)}
                   onDecrement={() => changeQty(item.id, -1)}
+                  onQtyChange={(text) => setQtyText(item.id, text)}
+                  onQtyBlur={() => clampQty(item.id)}
                   onRemove={() => removeItem(item.id)}
                 />
               ))}
@@ -500,6 +520,8 @@ function ItemRow({
   theme,
   onIncrement,
   onDecrement,
+  onQtyChange,
+  onQtyBlur,
   onRemove,
 }: {
   item: PurchaseOrderItem;
@@ -507,6 +529,8 @@ function ItemRow({
   theme: ReturnType<typeof useTheme>;
   onIncrement: () => void;
   onDecrement: () => void;
+  onQtyChange: (text: string) => void;
+  onQtyBlur: () => void;
   onRemove: () => void;
 }) {
   return (
@@ -528,9 +552,16 @@ function ItemRow({
         </ThemedText>
         <View style={styles.qtyRow}>
           <Stepper icon="remove" onPress={onDecrement} theme={theme} />
-          <ThemedText type="smallBold" style={styles.qtyValue}>
-            {item.qty}
-          </ThemedText>
+          <ThemedView type="background" style={styles.qtyInputWrap}>
+            <TextInput
+              value={String(item.qty)}
+              onChangeText={onQtyChange}
+              onBlur={onQtyBlur}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              style={[styles.qtyInput, { color: theme.text }]}
+            />
+          </ThemedView>
           <Stepper icon="add" onPress={onIncrement} theme={theme} />
           <ThemedText type="small" themeColor="textSecondary">
             × {formatMoney(item.cost)}
@@ -717,6 +748,19 @@ const styles = StyleSheet.create({
   },
   qtyValue: {
     minWidth: 20,
+    textAlign: 'center',
+  },
+  qtyInputWrap: {
+    minWidth: 40,
+    height: 28,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.one,
+  },
+  qtyInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 14,
+    fontWeight: '700',
     textAlign: 'center',
   },
   stepper: {

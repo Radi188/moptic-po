@@ -325,6 +325,8 @@ export const en = {
   'refill.bmPlaceholder': 'Enter BM name for the report',
   'refill.toWarehouse': 'To warehouse',
   'refill.bmLabel': 'BM name (controls the branch)',
+  'refill.deliveryPlaceholder': 'Enter delivery person name',
+  'refill.deliveryLabel': 'Delivery person',
   'refill.itemsToTransfer': 'Items to transfer',
   'refill.fillFromSold': 'Fill from sold',
   'refill.emptyItems':
@@ -871,6 +873,8 @@ export const km: Record<TranslationKey, string> = {
   'refill.bmPlaceholder': 'បញ្ចូលឈ្មោះ BM សម្រាប់របាយការណ៍',
   'refill.toWarehouse': 'ទៅឃ្លាំង',
   'refill.bmLabel': 'ឈ្មោះ BM (គ្រប់គ្រងសាខា)',
+  'refill.deliveryPlaceholder': 'បញ្ចូលឈ្មោះអ្នកដឹកជញ្ជូន',
+  'refill.deliveryLabel': 'អ្នកដឹកជញ្ជូន',
   'refill.itemsToTransfer': 'ទំនិញត្រូវផ្ទេរ',
   'refill.fillFromSold': 'បំពេញតាមការលក់',
   'refill.emptyItems':

@@ -24,6 +24,7 @@ import { OptionSheet } from '@/components/option-sheet';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { branchCode } from '@/constants/branches';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { SkeletonList } from '@/components/skeleton';
@@ -90,6 +91,7 @@ export default function BranchRefillScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [qtys, setQtys] = useState<Record<string, string>>({});
   const [bmName, setBmName] = useState('');
+  const [deliveryPerson, setDeliveryPerson] = useState('');
   const [stock, setStock] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(true);
@@ -314,10 +316,16 @@ export default function BranchRefillScreen() {
         date: params.date,
         createdDate: ymd(new Date()),
         bmName: bmName.trim(),
+        deliveryPerson: deliveryPerson.trim(),
       });
       await sendTelegramDocument({
         uri,
-        filename: `refill-${params.branchName || params.branchId}-${params.date}.pdf`,
+        // Keep the filename ASCII-only (branch short code, not the Khmer branch
+        // name) — Khmer's combining vowel/diacritic marks get silently dropped
+        // when this travels through the multipart Content-Disposition filename
+        // header, so "សាខាបាក់ទូក" arrives as "សខបកទក" on the Telegram side. The
+        // full Khmer name still renders correctly in the caption text below.
+        filename: `refill-${branchCode(params.branchId)}-${params.date}.pdf`,
         caption:
           `Stock refill — ${params.branchName || params.branchId} (${params.date})` +
           (bmName.trim() ? `\nBM: ${bmName.trim()}` : ''),
@@ -406,6 +414,28 @@ export default function BranchRefillScreen() {
                 value={bmName}
                 onChangeText={setBmName}
                 placeholder={t('refill.bmPlaceholder')}
+                placeholderTextColor={theme.textSecondary}
+                autoCapitalize="words"
+                style={[styles.bmInput, isTablet && styles.bmInputTablet, { color: theme.text }]}
+              />
+            </ThemedView>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              style={isTablet ? styles.labelTablet : undefined}>
+              {t('refill.deliveryLabel')}
+            </ThemedText>
+            <ThemedView
+              type="backgroundElement"
+              style={[styles.bmInputWrap, isTablet && styles.bmInputWrapTablet]}>
+              <Ionicons name="bicycle-outline" size={isTablet ? 22 : 18} color={theme.textSecondary} />
+              <TextInput
+                value={deliveryPerson}
+                onChangeText={setDeliveryPerson}
+                placeholder={t('refill.deliveryPlaceholder')}
                 placeholderTextColor={theme.textSecondary}
                 autoCapitalize="words"
                 style={[styles.bmInput, isTablet && styles.bmInputTablet, { color: theme.text }]}

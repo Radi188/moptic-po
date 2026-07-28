@@ -256,6 +256,7 @@ async function buildTransferReport(
     date: salesDate,
     createdDate: transfer.transactionDate.slice(0, 10),
     bmName: '',
+    deliveryPerson: '',
   };
   return { rows, reportMeta };
 }

@@ -4,7 +4,7 @@ import { login, logout, type ApiBranch } from '@/api/auth';
 import { setUnauthorizedHandler } from '@/api/client';
 import { isApiConfigured } from '@/api/config';
 import { tokenStore } from '@/auth/tokenStore';
-import { BRANCHES, type Branch } from '@/constants/branches';
+import { BRANCHES, branchCode, type Branch } from '@/constants/branches';
 import { storage } from '@/lib/storage';
 
 const SESSION_KEY = 'moptic.session';
@@ -33,7 +33,8 @@ type AuthContextValue = {
 };
 
 function toBranch(branch: ApiBranch): Branch {
-  return { id: String(branch.id), name: branch.branch_name, location: branch.address };
+  const id = String(branch.id);
+  return { id, name: branch.branch_name, location: branch.address, code: branchCode(id) };
 }
 
 /**

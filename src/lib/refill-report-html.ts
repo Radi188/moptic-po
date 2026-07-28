@@ -3,6 +3,9 @@
  * branch paper form). Kept free of native imports so it can be unit-tested /
  * previewed outside the app; expo-print rendering lives in refill-report.ts.
  */
+import { REPORT_LOGO_DATA_URI } from '@/lib/brand-logo';
+
+const STORE_NAME = 'ហាងវ៉ែនតា អឺម អុបទិក';
 
 export type RefillReportRow = {
   productName: string;
@@ -23,10 +26,12 @@ export type RefillReportMeta = {
   sourceName: string;
   /** YYYY-MM-DD sales date the user selected (the reference date). */
   date: string;
-  /** YYYY-MM-DD date the transfer was created (today). */
+  /** YYYY-MM-DD date the transfer was created (today) — shown as the transaction date. */
   createdDate: string;
   /** Branch manager controlling the branch (manually entered). */
   bmName: string;
+  /** Delivery person's name (manually entered) — printed under their signature line. */
+  deliveryPerson: string;
 };
 
 /** Derive a report row from the sold qty and the qty being transferred out. */
@@ -52,15 +57,15 @@ function esc(value: string | number) {
   );
 }
 
-/** Bilingual (Khmer / English) column headers, matching the paper control sheet. */
+/** Khmer-only column headers, matching the paper control sheet. */
 const COLUMNS = [
-  'ប្រភេទទំនិញ<br/><span class="en">Product name</span>',
-  'ស្តុកលក់សាខា<br/><span class="en">Branch sale</span>',
-  'ស្តុកផ្ញើចេញ<br/><span class="en">Transfer out</span>',
-  'ស្តុកសាខាទទួល<br/><span class="en">Branch to get</span>',
-  'ខ្វះ<br/><span class="en">Less</span>',
-  'លើស<br/><span class="en">Over</span>',
-  'ឈ្មោះ BM<br/><span class="en">BM name</span>',
+  'ប្រភេទទំនិញ',
+  'ស្តុកលក់សាខា',
+  'ស្តុកផ្ញើចេញ',
+  'ស្តុកសាខាទទួល',
+  'ខ្វះ',
+  'លើស',
+  'ឈ្មោះ BM',
 ];
 
 /**
@@ -129,7 +134,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       <tr class="cat">
         <td></td>
         <td class="name">${esc(label)}…</td>
-        <td colspan="6">${groupRows.length} items</td>
+        <td colspan="6">${groupRows.length} មុខទំនិញ</td>
       </tr>`
         : '';
       const items = groupRows.map((r) => itemRow(r, (n += 1))).join('');
@@ -137,7 +142,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
         ? `
       <tr class="subtotal">
         <td></td>
-        <td class="label">សរុបក្រុម / Subtotal</td>
+        <td class="label">សរុបក្រុម</td>
         <td>${st.sale}</td>
         <td>${st.out}</td>
         <td>${st.get}</td>
@@ -166,6 +171,9 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
         padding: 20px;
         font-size: 12px;
       }
+      .brand { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
+      .brand img { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; }
+      .brand .store-name { font-size: 16px; font-weight: 700; color: #232843; }
       h1 { font-size: 18px; margin: 0 0 6px; text-align: center; }
       .meta { margin: 0 0 14px; color: #444; font-size: 12px; line-height: 1.6; }
       .meta b { color: #1a1a1a; }
@@ -183,15 +191,25 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       tr.subtotal td.label { text-align: right; }
       tfoot td { font-weight: 700; background: #f2f3f7; }
       tfoot td.label { text-align: right; }
+      .checks { display: flex; justify-content: space-between; gap: 16px; margin-top: 18px; }
+      .checks .check { display: flex; align-items: flex-start; gap: 8px; flex: 1; font-size: 12px; line-height: 1.5; }
+      .checks .box { width: 13px; height: 13px; border: 1.5px solid #1a1a1a; flex-shrink: 0; margin-top: 2px; }
+      .signatures { display: flex; justify-content: space-between; gap: 16px; margin-top: 18px; text-align: center; }
+      .signatures .sign { flex: 1; font-size: 12px; }
+      .signatures .space { height: 46px; }
+      .signatures .sign-name { font-weight: 700; color: #232843; }
     </style>
   </head>
   <body>
-    <h1>List ស្តុកបញ្ជ-ផលិតផល ប្រចាំថ្ងៃ</h1>
+    <div class="brand">
+      <img src="${REPORT_LOGO_DATA_URI}" />
+      <span class="store-name">${esc(STORE_NAME)}</span>
+    </div>
+    <h1>លិខិតស្នើរនិងផ្ទេរស្តុក</h1>
     <p class="meta">
-      <b>សាខា / Branch:</b> ${esc(meta.branchName)} &nbsp;·&nbsp;
-      <b>ឃ្លាំង / From:</b> ${esc(meta.sourceName)}<br/>
-      <b>ថ្ងៃលក់ / Sales date (ref):</b> ${esc(meta.date)} &nbsp;·&nbsp;
-      <b>ថ្ងៃបង្កើត / Created:</b> ${esc(meta.createdDate)}<br/>
+      <b>ផ្ទេរពី:</b> ${esc(meta.sourceName)} &nbsp;&nbsp;
+      <b>ទៅកាន់:</b> ${esc(meta.branchName)}<br/>
+      <b>កាលបរិច្ឆេទ:</b> ${esc(meta.createdDate)}<br/>
       <b>BM:</b> ${esc(meta.bmName || '–')}
     </p>
     <table>
@@ -205,7 +223,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       <tfoot>
         <tr>
           <td></td>
-          <td class="label">សរុប / Total</td>
+          <td class="label">សរុប</td>
           <td>${totals.sale}</td>
           <td>${totals.out}</td>
           <td>${totals.get}</td>
@@ -215,6 +233,17 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
         </tr>
       </tfoot>
     </table>
+
+    <div class="checks">
+      <div class="check"><span class="box"></span><span>បានត្រួតពិនិត្យ និង​ទទួលស្គាល់នូវទំនិញដែលបានទទួលបានស្ថិតក្នុងលក្ខខណ្ឌល្អប្រសើរ ត្រឹមត្រូវ</span></div>
+      <div class="check"><span class="box"></span><span>បានត្រួតពិនិត្យ និង​ទទួលបានគ្រប់ចំនួនរាល់ទំនិញដែលបានស្នើរ</span></div>
+    </div>
+
+    <div class="signatures">
+      <div class="sign">ហត្ថាលេខានិងឈ្មោះអ្នកផ្ទេរ<div class="space"></div></div>
+      <div class="sign">ហត្ថាលេខានិងឈ្មោះអ្នកដឹក<div class="space sign-name">${esc(meta.deliveryPerson || '')}</div></div>
+      <div class="sign">ហត្ថាលេខានិងឈ្មោះអ្នកទទួល<div class="space"></div></div>
+    </div>
   </body>
 </html>`;
 }
