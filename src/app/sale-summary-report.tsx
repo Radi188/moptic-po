@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -33,8 +34,10 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { useTranslation, type TranslateFn } from '@/contexts/i18n';
 import type { Stat } from '@/data/dashboard';
-import { formatDate } from '@/data/purchase-orders';
+import { formatDate, formatMoney } from '@/data/purchase-orders';
 import { useTheme } from '@/hooks/use-theme';
+
+const ERROR_COLOR = '#e5484d';
 
 function ymd(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -46,6 +49,17 @@ function withThousands(n: number) {
   return Math.round(n)
     .toString()
     .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/**
+ * The listed price, shown as a min–max range when the item sold at more than
+ * one price during the period.
+ */
+function priceLabel(item: SaleSummaryItem) {
+  if (item.minPrice !== item.maxPrice) {
+    return `${formatMoney(item.minPrice)} – ${formatMoney(item.maxPrice)}`;
+  }
+  return formatMoney(item.unitPrice);
 }
 
 function summaryStats(t: TranslateFn, s: SaleSummaryTotals): Stat[] {
@@ -84,33 +98,64 @@ export default function SaleSummaryReportScreen() {
   const [search, setSearch] = useState('');
   const [categories, setCategories] = useState<SaleSummaryCategory[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // The summary covers the whole date range, so it comes from page 1 only and
+  // is never recomputed while paging.
   const [summary, setSummary] = useState<SaleSummaryTotals | null>(null);
+  const [page, setPage] = useState(1);
+  const [lastPage, setLastPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(
-    async (from: Date, to: Date, branchId: string | undefined, q: string) => {
-      setLoading(true);
+    async (
+      from: Date,
+      to: Date,
+      branchId: string | undefined,
+      q: string,
+      targetPage: number,
+      mode: 'replace' | 'append',
+    ) => {
+      if (mode === 'append') setLoadingMore(true);
+      else setLoading(true);
       setError(null);
       try {
-        const report = await fetchSalesSummary({
+        const result = await fetchSalesSummary({
           dateFrom: ymd(from),
           dateTo: ymd(to),
           branchId,
-          search: q,
+          categorySearch: q,
+          page: targetPage,
         });
-        setCategories(report.categories);
-        setSummary(report.summary);
-        // A search narrows the result set enough that expanding everything
-        // by default is more useful than making the user open each category.
-        setExpanded(q ? new Set(report.categories.map((c) => c.categoryId)) : new Set());
+        // Pagination is by category: whole groups are appended, and each group
+        // already carries every one of its items.
+        setCategories((prev) =>
+          mode === 'append' ? [...prev, ...result.categories] : result.categories,
+        );
+        if (mode === 'replace') {
+          setSummary(result.summary);
+          // A search narrows the result set enough that expanding everything
+          // by default is more useful than making the user open each category.
+          setExpanded(q ? new Set(result.categories.map((c) => c.categoryId)) : new Set());
+        } else if (q) {
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            result.categories.forEach((c) => next.add(c.categoryId));
+            return next;
+          });
+        }
+        setPage(result.meta.currentPage);
+        setLastPage(result.meta.lastPage);
       } catch (e) {
         setError(e instanceof Error ? e.message : t('common.loadReportError'));
-        setCategories([]);
-        setSummary(null);
+        if (mode === 'replace') {
+          setCategories([]);
+          setSummary(null);
+        }
       } finally {
         setLoading(false);
+        setLoadingMore(false);
       }
     },
     [t],
@@ -125,15 +170,46 @@ export default function SaleSummaryReportScreen() {
     });
   }
 
-  // Initial load + debounced search; reloads immediately on date/branch changes.
+  // Initial load + debounced category search; any filter change restarts at
+  // page 1.
   useEffect(() => {
-    const t = setTimeout(() => load(dateFrom, dateTo, branch?.id, search), search ? 350 : 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(
+      () => load(dateFrom, dateTo, branch?.id, search, 1, 'replace'),
+      search ? 350 : 0,
+    );
+    return () => clearTimeout(timer);
   }, [dateFrom, dateTo, branch, search, load]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    load(dateFrom, dateTo, branch?.id, search).finally(() => setRefreshing(false));
+    load(dateFrom, dateTo, branch?.id, search, 1, 'replace').finally(() =>
+      setRefreshing(false),
+    );
+  }, [load, dateFrom, dateTo, branch, search]);
+
+  const loadMore = useCallback(() => {
+    if (loading || loadingMore || refreshing) return;
+    // Nothing to page through on an empty list, and guard against a missing
+    // page count so onEndReached can't fire an endless append loop.
+    if (categories.length === 0) return;
+    if (!lastPage || page >= lastPage) return;
+    load(dateFrom, dateTo, branch?.id, search, page + 1, 'append');
+  }, [
+    loading,
+    loadingMore,
+    refreshing,
+    categories.length,
+    page,
+    lastPage,
+    load,
+    dateFrom,
+    dateTo,
+    branch,
+    search,
+  ]);
+
+  const retry = useCallback(() => {
+    load(dateFrom, dateTo, branch?.id, search, 1, 'replace');
   }, [load, dateFrom, dateTo, branch, search]);
 
   function openDatePicker(which: 'from' | 'to') {
@@ -184,7 +260,7 @@ export default function SaleSummaryReportScreen() {
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder={t('filters.searchItem')}
+            placeholder={t('filters.searchCategory')}
             placeholderTextColor={theme.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -266,6 +342,8 @@ export default function SaleSummaryReportScreen() {
         keyExtractor={(category, index) => `${category.categoryId}-${index}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -296,11 +374,22 @@ export default function SaleSummaryReportScreen() {
         ListEmptyComponent={
           loading ? (
             <SkeletonList />
+          ) : error ? (
+            <ErrorState message={error} onRetry={retry} theme={theme} />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              {error ?? t('saleSummary.empty')}
+              {t('saleSummary.empty')}
             </ThemedText>
           )
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footer}>
+              <ActivityIndicator color={theme.tint} />
+            </View>
+          ) : error && categories.length > 0 ? (
+            <ErrorState message={error} onRetry={retry} theme={theme} />
+          ) : null
         }
       />
     </ThemedView>
@@ -331,6 +420,48 @@ function DateField({
   );
 }
 
+/** Surfaces the API message (including the 400 `error` payload) with a retry. */
+function ErrorState({
+  message,
+  onRetry,
+  theme,
+}: {
+  message: string;
+  onRetry: () => void;
+  theme: ReturnType<typeof useTheme>;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Pressable onPress={onRetry} style={({ pressed }) => pressed && styles.pressed}>
+      <ThemedView type="backgroundElement" style={styles.errorCard}>
+        <Ionicons name="alert-circle-outline" size={20} color={ERROR_COLOR} />
+        <View style={styles.cardMain}>
+          <ThemedText type="small" style={{ color: ERROR_COLOR }}>
+            {message}
+          </ThemedText>
+          <ThemedText type="smallBold" style={{ color: theme.tint }}>
+            {t('common.tapToRetry')}
+          </ThemedText>
+        </View>
+      </ThemedView>
+    </Pressable>
+  );
+}
+
+/** One label/value pair inside an item card. */
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        {label}
+      </ThemedText>
+      <ThemedText type="small" numberOfLines={1}>
+        {value}
+      </ThemedText>
+    </View>
+  );
+}
+
 function CategorySection({
   category,
   expanded,
@@ -352,15 +483,16 @@ function CategorySection({
               {category.categoryName || t('common.uncategorized')}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {category.itemCount} {category.itemCount === 1 ? t('common.item') : t('common.items')}
+              {category.itemCount} {category.itemCount === 1 ? t('common.item') : t('common.items')} ·{' '}
+              {withThousands(category.totalQty)} {t('common.qty')}
             </ThemedText>
           </View>
           <View style={styles.qtyWrap}>
             <ThemedText type="smallBold" style={{ fontSize: 18 }}>
-              {withThousands(category.totalQty)}
+              {formatMoney(category.totalRevenue)}
             </ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              {t('common.qtySold')}
+              {t('saleSummary.field.revenue')}
             </ThemedText>
           </View>
           <Ionicons
@@ -387,28 +519,37 @@ function ItemCard({ item, theme }: { item: SaleSummaryItem; theme: ReturnType<ty
   const { t } = useTranslation();
   return (
     <ThemedView type="backgroundElement" style={styles.card}>
-      <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.iconTileImage} contentFit="cover" />
-        ) : (
-          <Ionicons name="cube-outline" size={22} color={theme.tint} />
-        )}
+      <View style={styles.cardTop}>
+        <View style={[styles.iconTile, { backgroundColor: theme.tintSoft }]}>
+          {item.image ? (
+            <Image source={{ uri: item.image }} style={styles.iconTileImage} contentFit="cover" />
+          ) : (
+            <Ionicons name="cube-outline" size={22} color={theme.tint} />
+          )}
+        </View>
+        <View style={styles.cardMain}>
+          <ThemedText type="smallBold" numberOfLines={1}>
+            {item.itemName}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+            {item.itemCode} · {item.invoiceCount}{' '}
+            {item.invoiceCount === 1 ? t('common.invoice') : t('common.invoices')}
+          </ThemedText>
+        </View>
+        <View style={styles.qtyWrap}>
+          <ThemedText type="smallBold" style={{ fontSize: 18 }}>
+            {withThousands(item.qtySold)}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {t('common.qtySold')}
+          </ThemedText>
+        </View>
       </View>
-      <View style={styles.cardMain}>
-        <ThemedText type="smallBold" numberOfLines={1}>
-          {item.itemName}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-          {item.itemCode} · {item.invoiceCount} {item.invoiceCount === 1 ? t('common.invoice') : t('common.invoices')}
-        </ThemedText>
-      </View>
-      <View style={styles.qtyWrap}>
-        <ThemedText type="smallBold" style={{ fontSize: 18 }}>
-          {withThousands(item.qtySold)}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {t('common.qtySold')}
-        </ThemedText>
+
+      <View style={styles.metrics}>
+        <Metric label={t('saleSummary.field.unitPrice')} value={priceLabel(item)} />
+        <Metric label={t('saleSummary.field.avgSoldPrice')} value={formatMoney(item.avgSoldPrice)} />
+        <Metric label={t('saleSummary.field.subtotal')} value={formatMoney(item.subtotal)} />
       </View>
     </ThemedView>
   );
@@ -487,6 +628,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: Spacing.six,
   },
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.four,
+  },
+  footer: {
+    paddingVertical: Spacing.four,
+  },
   categorySection: {
     gap: Spacing.two,
   },
@@ -505,11 +656,23 @@ const styles = StyleSheet.create({
     paddingLeft: Spacing.three,
   },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.three,
     padding: Spacing.three,
     borderRadius: Spacing.four,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  metrics: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: Spacing.two,
+  },
+  metric: {
+    width: '33.33%',
+    gap: Spacing.half,
   },
   iconTile: {
     width: 46,

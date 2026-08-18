@@ -40,6 +40,7 @@ export const en = {
   'common.noResults': 'No results.',
   'common.noItemsFound': 'No items found.',
   'common.loadReportError': 'Failed to load report.',
+  'common.tapToRetry': 'Tap to retry',
   'common.uncategorized': 'Uncategorized',
   'common.comingSoon': 'Coming soon',
   'common.comingSoonBody': 'This feature is not available yet.',
@@ -75,6 +76,7 @@ export const en = {
   'filters.from': 'From',
   'filters.to': 'To',
   'filters.searchItem': 'Search item',
+  'filters.searchCategory': 'Search category',
 
   // Transfer statuses (shared between the list and detail screens).
   'status.pending': 'Pending',
@@ -259,6 +261,10 @@ export const en = {
   'saleSummary.stat.qtySold': 'Qty Sold',
   'saleSummary.stat.items': 'Items',
   'saleSummary.stat.categories': 'Categories',
+  'saleSummary.field.unitPrice': 'Unit price',
+  'saleSummary.field.avgSoldPrice': 'Avg sold',
+  'saleSummary.field.subtotal': 'Subtotal',
+  'saleSummary.field.revenue': 'Revenue',
   'saleSummary.empty': 'No sales for this period.',
 
   // Transfer In Report.
@@ -608,6 +614,7 @@ export const km: Record<TranslationKey, string> = {
   'common.noResults': 'គ្មានលទ្ធផលទេ។',
   'common.noItemsFound': 'រកមិនឃើញទំនិញទេ។',
   'common.loadReportError': 'មិនអាចផ្ទុករបាយការណ៍បានទេ។',
+  'common.tapToRetry': 'ចុចដើម្បីព្យាយាមម្តងទៀត',
   'common.uncategorized': 'គ្មានប្រភេទ',
   'common.comingSoon': 'មកដល់ឆាប់ៗនេះ',
   'common.comingSoonBody': 'មុខងារនេះមិនទាន់មានទេ។',
@@ -640,6 +647,7 @@ export const km: Record<TranslationKey, string> = {
   'filters.from': 'ពី',
   'filters.to': 'ដល់',
   'filters.searchItem': 'ស្វែងរកទំនិញ',
+  'filters.searchCategory': 'ស្វែងរកប្រភេទ',
 
   'status.pending': 'រង់ចាំ',
   'status.approved': 'បានអនុម័ត',
@@ -812,6 +820,10 @@ export const km: Record<TranslationKey, string> = {
   'saleSummary.stat.qtySold': 'បរិមាណលក់',
   'saleSummary.stat.items': 'ទំនិញ',
   'saleSummary.stat.categories': 'ប្រភេទ',
+  'saleSummary.field.unitPrice': 'តម្លៃឯកតា',
+  'saleSummary.field.avgSoldPrice': 'តម្លៃលក់មធ្យម',
+  'saleSummary.field.subtotal': 'សរុបរង',
+  'saleSummary.field.revenue': 'ចំណូល',
   'saleSummary.empty': 'គ្មានការលក់សម្រាប់កំឡុងពេលនេះទេ។',
 
   'transferIn.empty': 'គ្មានការផ្ទេរចូលសម្រាប់កំឡុងពេលនេះទេ។',
