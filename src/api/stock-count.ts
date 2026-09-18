@@ -46,6 +46,33 @@ export type StockCountItem = {
   /** null when not yet counted. */
   countedQty: number | null;
   reason: string;
+  /** Category the line belongs to — a sub-category id on this backend. */
+  categoryId: string;
+  categoryName: string;
+  mainCategoryId: string;
+  /** Set when this line is itself a variant of another item. */
+  variantOf: StockCountVariantRef | null;
+  /** This line's own variants, when it is a parent item. */
+  variants: StockCountVariant[];
+  /** True once the line has been finalized (its category, or the whole count, was completed). */
+  completed: boolean;
+};
+
+/** A variant row from `item_variations`. */
+export type StockCountVariant = {
+  variantItemId: string;
+  itemCode: string;
+  itemName: string;
+  sku: string;
+  spec: string;
+  colorName: string;
+};
+
+export type StockCountVariantRef = {
+  parentItemId: string;
+  sku: string;
+  spec: string;
+  colorName: string;
 };
 
 const num = (v: string | number | undefined | null) => Number(v ?? 0) || 0;
@@ -148,11 +175,73 @@ type RawItem = {
   expected_qty?: string | number;
   counted_qty?: string | number | null;
   reason?: string | null;
+  category_id?: number | string;
+  sub_category_id?: number | string;
+  main_category_id?: number | string;
+  category_name?: string;
+  variant?: RawVariantRef | null;
+  variants?: RawVariant[] | null;
+  category?: string | { id?: number | string; category_name?: string; name?: string } | null;
+  sub_category?: { id?: number | string; category_name?: string; name?: string } | null;
+  status?: string | number;
+  completed?: boolean | string | number;
+  is_completed?: boolean | string | number;
+  completed_at?: string | null;
 };
+
+/** Line-level lock flag — the backend shape is unconfirmed, so accept the usual spellings. */
+function mapItemCompleted(row: RawItem): boolean {
+  if (row.is_completed != null) return Boolean(num(row.is_completed as string | number));
+  if (row.completed != null) return Boolean(num(row.completed as string | number));
+  if (row.completed_at) return true;
+  return mapStatus(row.status) === 'completed';
+}
+
+type RawVariant = {
+  variant_item_id?: number | string | null;
+  item_code?: string | null;
+  item_name?: string | null;
+  sku?: string | null;
+  spec?: string | null;
+  color_name?: string | null;
+};
+
+type RawVariantRef = {
+  parent_item_id?: number | string | null;
+  sku?: string | null;
+  spec?: string | null;
+  color_name?: string | null;
+};
+
+/** A short label for a variant, e.g. "Black · 52mm". */
+export function variantLabel(v: { colorName: string; spec: string; sku: string }): string {
+  return [v.colorName, v.spec, v.sku].map((p) => p.trim()).filter(Boolean).join(' · ');
+}
+
+/** The category field's spelling varies by endpoint; accept the usual ones. */
+function mapItemCategory(row: RawItem): { id: string; name: string } {
+  const nested = row.sub_category ?? (typeof row.category === 'object' ? row.category : null);
+  const id = row.sub_category_id ?? row.category_id ?? nested?.id;
+  const name =
+    row.category_name ??
+    nested?.category_name ??
+    nested?.name ??
+    (typeof row.category === 'string' ? row.category : '');
+  return { id: str(id), name: name ?? '' };
+}
 
 function mapItem(row: RawItem): StockCountItem {
   const counted = row.counted_qty;
   const code = (row.item_code ?? '').trim();
+  const category = mapItemCategory(row);
+  const variantOf = row.variant
+    ? {
+        parentItemId: str(row.variant.parent_item_id),
+        sku: str(row.variant.sku),
+        spec: str(row.variant.spec),
+        colorName: str(row.variant.color_name),
+      }
+    : null;
   return {
     detailId: str(row.detail_id ?? row.id),
     itemId: str(row.item_id),
@@ -162,7 +251,60 @@ function mapItem(row: RawItem): StockCountItem {
     systemQty: num(row.system_qty ?? row.snapshot_qty ?? row.expected_qty),
     countedQty: counted == null || counted === '' ? null : num(counted),
     reason: row.reason ?? '',
+    categoryId: category.id,
+    categoryName: category.name,
+    mainCategoryId: str(row.main_category_id),
+    variantOf,
+    variants: (row.variants ?? []).map((v) => ({
+      variantItemId: str(v.variant_item_id),
+      itemCode: str(v.item_code),
+      itemName: str(v.item_name),
+      sku: str(v.sku),
+      spec: str(v.spec),
+      colorName: str(v.color_name),
+    })),
+    completed: mapItemCompleted(row),
   };
+}
+
+/** Per-category (or whole-count) progress, derived from the line items. */
+export type StockCountProgress = {
+  total: number;
+  counted: number;
+  /** Lines already finalized. */
+  completed: number;
+  /** Counted lines that differ from the system quantity. */
+  discrepancies: number;
+};
+
+export const EMPTY_PROGRESS: StockCountProgress = {
+  total: 0,
+  counted: 0,
+  completed: 0,
+  discrepancies: 0,
+};
+
+export function addProgress(a: StockCountProgress, b: StockCountProgress): StockCountProgress {
+  return {
+    total: a.total + b.total,
+    counted: a.counted + b.counted,
+    completed: a.completed + b.completed,
+    discrepancies: a.discrepancies + b.discrepancies,
+  };
+}
+
+export function summarizeStockCountItems(items: StockCountItem[]): StockCountProgress {
+  let counted = 0;
+  let completed = 0;
+  let discrepancies = 0;
+  for (const it of items) {
+    if (it.countedQty != null) {
+      counted += 1;
+      if (it.countedQty !== it.systemQty) discrepancies += 1;
+    }
+    if (it.completed) completed += 1;
+  }
+  return { total: items.length, counted, completed, discrepancies };
 }
 
 type RawItemPage =
@@ -294,9 +436,22 @@ export async function submitStockCountItems(
   return data;
 }
 
-/** POST /stock-counts/{id}/complete — finalize (locks edits). */
-export async function completeStockCount(id: string): Promise<unknown> {
-  const { data } = await api.post(`/stock-counts/${id}/complete`);
+/**
+ * POST /stock-counts/{id}/complete — finalize lines (locks further edits).
+ *
+ * Pass `categoryId` (a main or sub category) to sign off just that category and
+ * leave the rest of the count open. The count itself flips to `completed` only
+ * once no line is left open.
+ */
+export async function completeStockCount(id: string, categoryId?: string): Promise<unknown> {
+  const body = categoryId ? { category_id: categoryId } : undefined;
+  const { data } = await api.post(`/stock-counts/${id}/complete`, body);
+  return data;
+}
+
+/** POST /stock-counts/{id}/reopen — send a completed count back to draft so it can be edited. */
+export async function reopenStockCount(id: string): Promise<unknown> {
+  const { data } = await api.post(`/stock-counts/${id}/reopen`);
   return data;
 }
 

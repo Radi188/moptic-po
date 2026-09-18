@@ -41,7 +41,10 @@ export default function NewStockCountScreen() {
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
   const [warehouseSheet, setWarehouseSheet] = useState(false);
-  const [inStockOnly, setInStockOnly] = useState(true);
+  // Off by default: a physical count should cover everything on the shelf,
+  // including items the system currently shows as zero. Ticking it narrows the
+  // count to items that already have stock in the warehouse.
+  const [inStockOnly, setInStockOnly] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);

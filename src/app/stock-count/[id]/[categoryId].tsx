@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,19 +8,18 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
-import { fetchCategories, type Category } from '@/api/categories';
+import { fetchCategories } from '@/api/categories';
 import {
-  completeStockCount,
   fetchStockCount,
   fetchStockCountItems,
   submitStockCountItems,
+  variantLabel,
   type StockCountDetail,
   type StockCountItem,
   type SubmitCountLine,
@@ -30,18 +29,17 @@ import { OptionSheet } from '@/components/option-sheet';
 import { ScreenHeader } from '@/components/screen-header';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { ALL_CATEGORIES, ALL_ITEMS_PER_PAGE } from '@/constants/stock-count';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatMoney } from '@/data/inventory';
 import { SkeletonList } from '@/components/skeleton';
 import { useTranslation } from '@/contexts/i18n';
+import { useStockCountComplete } from '@/hooks/use-stock-count-complete';
 import { useTheme } from '@/hooks/use-theme';
 
 const BRAND = '#232843';
 const OVER = '#30A46C';
 const SHORT = '#e5484d';
-
-// Pagination/infinite-scroll is disabled — request all items in a single page.
-const ALL_ITEMS_PER_PAGE = 1000;
 
 const OVERAGE_REASON_KEYS = [
   'reason.foundExtra',
@@ -64,8 +62,12 @@ const SHORTAGE_REASON_KEYS = [
 
 type Edit = { counted: string; reason: string };
 
-export default function StockCountDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export default function StockCountCategoryScreen() {
+  const params = useLocalSearchParams<{ id: string; categoryId: string; name?: string }>();
+  const id = params.id;
+  // The route always carries a segment; `all` means "no category filter". The
+  // backend matches `id = X OR main_id = X`, so a sub id filters on its own.
+  const categoryId = params.categoryId === ALL_CATEGORIES ? '' : (params.categoryId ?? '');
   const router = useRouter();
   const theme = useTheme();
   const { t } = useTranslation();
@@ -76,8 +78,8 @@ export default function StockCountDetailScreen() {
   const [items, setItems] = useState<StockCountItem[]>([]);
   const [search, setSearch] = useState('');
   const [onlyDiscrepancy, setOnlyDiscrepancy] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [categoryId, setCategoryId] = useState('');
+  // The overview passes the name through; resolve it only on a cold deep link.
+  const [resolvedName, setResolvedName] = useState(params.name ?? '');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,9 +88,17 @@ export default function StockCountDetailScreen() {
   const [edits, setEdits] = useState<Record<string, Edit>>({});
   const [reasonFor, setReasonFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [completing, setCompleting] = useState(false);
 
   const locked = header?.status === 'completed';
+  const categoryName = resolvedName;
+  // Every line of the selected category is finalized — nothing left to complete
+  // here. Only trustworthy on an unfiltered list, which is the whole category.
+  const categoryLocked =
+    !!categoryId &&
+    !search.trim() &&
+    !onlyDiscrepancy &&
+    items.length > 0 &&
+    items.every((it) => it.completed);
 
   const loadHeader = useCallback(() => {
     fetchStockCount(id)
@@ -97,16 +107,16 @@ export default function StockCountDetailScreen() {
   }, [id]);
 
   const load = useCallback(
-    async (q: string, only: boolean, cat: string) => {
+    async (q: string, only: boolean) => {
       const reqId = ++requestId.current;
       setLoading(true);
       setError(null);
       try {
         const result = await fetchStockCountItems({
           id,
+          categoryId,
           search: q,
           onlyDiscrepancy: only,
-          categoryId: cat,
           perPage: ALL_ITEMS_PER_PAGE,
         });
         if (reqId !== requestId.current) return;
@@ -120,7 +130,7 @@ export default function StockCountDetailScreen() {
         if (reqId === requestId.current) setLoading(false);
       }
     },
-    [id, t],
+    [id, categoryId, t],
   );
 
   useEffect(() => {
@@ -128,21 +138,29 @@ export default function StockCountDetailScreen() {
   }, [loadHeader]);
 
   useEffect(() => {
+    if (!categoryId || params.name) return;
     fetchCategories()
-      .then(setCategories)
+      .then((list) => {
+        // The id can be either level of the tree, so check the subs too.
+        for (const main of list) {
+          if (main.id === categoryId) return setResolvedName(main.name.trim());
+          const sub = main.subCategories.find((c) => c.id === categoryId);
+          if (sub) return setResolvedName(sub.name.trim() || main.name.trim());
+        }
+      })
       .catch(() => {});
-  }, []);
+  }, [categoryId, params.name]);
 
   useEffect(() => {
-    const t = setTimeout(() => load(search, onlyDiscrepancy, categoryId), search ? 350 : 0);
+    const t = setTimeout(() => load(search, onlyDiscrepancy), search ? 350 : 0);
     return () => clearTimeout(t);
-  }, [search, onlyDiscrepancy, categoryId, load]);
+  }, [search, onlyDiscrepancy, load]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadHeader();
-    load(search, onlyDiscrepancy, categoryId).finally(() => setRefreshing(false));
-  }, [loadHeader, load, search, onlyDiscrepancy, categoryId]);
+    load(search, onlyDiscrepancy).finally(() => setRefreshing(false));
+  }, [loadHeader, load, search, onlyDiscrepancy]);
 
   // Display helpers that prefer local edits, falling back to persisted values.
   const countedOf = (it: StockCountItem) =>
@@ -170,7 +188,7 @@ export default function StockCountDetailScreen() {
     const lines: { it: StockCountItem; counted: number; reason: string; diff: number }[] = [];
     for (const [detailId, edit] of Object.entries(edits)) {
       const it = byId.get(detailId);
-      if (!it || edit.counted === '') continue;
+      if (!it || it.completed || edit.counted === '') continue;
       const counted = parseInt(edit.counted, 10) || 0;
       lines.push({ it, counted, reason: edit.reason, diff: counted - it.systemQty });
     }
@@ -194,7 +212,7 @@ export default function StockCountDetailScreen() {
       await submitStockCountItems(id, payload);
       setEdits({});
       loadHeader();
-      await load(search, onlyDiscrepancy, categoryId);
+      await load(search, onlyDiscrepancy);
     } catch (e) {
       setError(e instanceof Error ? e.message : t('count.saveError'));
     } finally {
@@ -202,35 +220,52 @@ export default function StockCountDetailScreen() {
     }
   }
 
-  function confirmComplete() {
+  const refreshAfterComplete = useCallback(() => {
+    setEdits({});
+    loadHeader();
+    load(search, onlyDiscrepancy);
+  }, [loadHeader, load, search, onlyDiscrepancy]);
+
+  const { completing, confirmComplete } = useStockCountComplete({
+    id,
+    categoryId,
+    categoryName,
+    onDone: refreshAfterComplete,
+  });
+
+  function onCompletePress() {
     if (pending.length > 0) {
       Alert.alert(t('count.unsavedTitle'), t('count.unsavedBody'));
       return;
     }
-    Alert.alert(
-      t('count.completeTitle'),
-      t('count.completeBody'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        { text: t('count.complete'), style: 'destructive', onPress: runComplete },
-      ],
-    );
+    confirmComplete();
   }
 
-  async function runComplete() {
-    setCompleting(true);
-    try {
-      await completeStockCount(id);
-      loadHeader();
-    } catch (e) {
-      Alert.alert(
-        t('transfers.updateFailedTitle'),
-        e instanceof Error ? e.message : t('count.completeFailBody'),
-      );
-    } finally {
-      setCompleting(false);
+  /**
+   * Variants are ordinary items, so each is its own count line. Sort them in
+   * under their parent instead of leaving them scattered by item code.
+   */
+  const ordered = useMemo(() => {
+    const byItemId = new Map(items.map((it) => [it.itemId, it]));
+    const children = new Map<string, StockCountItem[]>();
+    for (const it of items) {
+      const parentId = it.variantOf?.parentItemId;
+      if (!parentId || !byItemId.has(parentId)) continue;
+      const list = children.get(parentId);
+      if (list) list.push(it);
+      else children.set(parentId, [it]);
     }
-  }
+    const out: { item: StockCountItem; isChild: boolean }[] = [];
+    for (const it of items) {
+      // A variant whose parent is also on this list is emitted with the parent.
+      if (it.variantOf && byItemId.has(it.variantOf.parentItemId)) continue;
+      out.push({ item: it, isChild: false });
+      for (const child of children.get(it.itemId) ?? []) {
+        out.push({ item: child, isChild: true });
+      }
+    }
+    return out;
+  }, [items]);
 
   const reasonItem = reasonFor ? items.find((it) => it.detailId === reasonFor) : null;
   const reasonDiff = reasonItem
@@ -240,8 +275,12 @@ export default function StockCountDetailScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenHeader
-        title={header?.reference || t('settings.row.stockCount')}
-        subtitle={locked ? t('count.subtitleLocked') : t('count.subtitleActive')}
+        title={categoryName || t('count.allItems')}
+        subtitle={
+          locked || categoryLocked
+            ? t('count.subtitleLocked')
+            : header?.reference || t('count.subtitleActive')
+        }
         onBack={() => router.back()}
       />
 
@@ -250,8 +289,8 @@ export default function StockCountDetailScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={80}>
         <FlatList
-          data={items}
-          keyExtractor={(it, index) => `${it.detailId}-${index}`}
+          data={ordered}
+          keyExtractor={(row, index) => `${row.item.detailId}-${index}`}
           contentContainerStyle={styles.list}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -300,50 +339,17 @@ export default function StockCountDetailScreen() {
                   </ThemedText>
                 </Pressable>
               </View>
-
-              {categories.length > 0 && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={styles.tabs}>
-                  {[{ id: '', name: t('transfers.filterAll') }, ...categories].map((cat) => {
-                    const active = categoryId === cat.id;
-                    return (
-                      <Pressable
-                        key={cat.id || 'all'}
-                        onPress={() => setCategoryId(cat.id)}
-                        style={({ pressed }) => [
-                          styles.tab,
-                          {
-                            backgroundColor: active ? BRAND : theme.backgroundElement,
-                          },
-                          pressed && styles.pressed,
-                        ]}>
-                        <ThemedText
-                          type="small"
-                          numberOfLines={1}
-                          style={[
-                            styles.tabText,
-                            active ? styles.tabActive : { color: theme.textSecondary },
-                          ]}>
-                          {cat.name}
-                        </ThemedText>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              )}
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={({ item: row }) => (
             <CountItemRow
-              item={item}
-              counted={countedOf(item)}
-              reason={reasonOf(item)}
-              locked={locked}
-              onCounted={(v) => setCounted(item, v)}
-              onOpenReason={() => setReasonFor(item.detailId)}
+              item={row.item}
+              isVariant={row.isChild}
+              counted={countedOf(row.item)}
+              reason={reasonOf(row.item)}
+              locked={locked || row.item.completed}
+              onCounted={(v) => setCounted(row.item, v)}
+              onOpenReason={() => setReasonFor(row.item.detailId)}
               theme={theme}
             />
           )}
@@ -357,6 +363,15 @@ export default function StockCountDetailScreen() {
             )
           }
         />
+
+        {!locked && missingReasons > 0 && (
+          <View style={[styles.hint, { backgroundColor: `${SHORT}18` }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={SHORT} />
+            <ThemedText type="small" style={styles.hintText}>
+              {t('count.needReasonHint', { n: missingReasons })}
+            </ThemedText>
+          </View>
+        )}
 
         {!locked && (
           <View style={[styles.bar, { borderTopColor: theme.backgroundElement }]}>
@@ -376,16 +391,30 @@ export default function StockCountDetailScreen() {
                 </ThemedText>
               )}
             </Pressable>
-            <Pressable
-              onPress={confirmComplete}
-              disabled={completing}
-              style={({ pressed }) => [styles.completeBtn, (pressed || completing) && styles.pressed]}>
-              {completing ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <ThemedText style={styles.completeText}>{t('count.complete')}</ThemedText>
-              )}
-            </Pressable>
+            {categoryLocked ? (
+              <View style={styles.doneNote}>
+                <Ionicons name="lock-closed" size={16} color={OVER} />
+                <ThemedText type="small" numberOfLines={1} style={{ color: OVER }}>
+                  {t('count.categoryCompleted')}
+                </ThemedText>
+              </View>
+            ) : (
+              <Pressable
+                onPress={onCompletePress}
+                disabled={completing}
+                style={({ pressed }) => [
+                  styles.completeBtn,
+                  (pressed || completing) && styles.pressed,
+                ]}>
+                {completing ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <ThemedText numberOfLines={1} style={styles.completeText}>
+                    {t('count.complete')}
+                  </ThemedText>
+                )}
+              </Pressable>
+            )}
           </View>
         )}
       </KeyboardAvoidingView>
@@ -451,6 +480,7 @@ function Stat({
 
 function CountItemRow({
   item,
+  isVariant,
   counted,
   reason,
   locked,
@@ -459,6 +489,8 @@ function CountItemRow({
   theme,
 }: {
   item: StockCountItem;
+  /** Indented under the parent product it varies from. */
+  isVariant: boolean;
   counted: string;
   reason: string;
   locked: boolean;
@@ -470,14 +502,32 @@ function CountItemRow({
   const hasCount = counted !== '';
   const diff = hasCount ? (parseInt(counted, 10) || 0) - item.systemQty : 0;
   const diffColor = diff > 0 ? OVER : diff < 0 ? SHORT : theme.textSecondary;
+  const variant = item.variantOf ? variantLabel(item.variantOf) : '';
 
   return (
-    <ThemedView type="backgroundElement" style={styles.card}>
+    <ThemedView type="backgroundElement" style={[styles.card, isVariant && styles.variantCard]}>
       <View style={styles.cardTop}>
         <View style={styles.cardInfo}>
-          <ThemedText type="smallBold" numberOfLines={1}>
-            {item.itemName}
-          </ThemedText>
+          <View style={styles.nameRow}>
+            {isVariant && (
+              <Ionicons name="return-down-forward" size={14} color={theme.textSecondary} />
+            )}
+            <ThemedText type="smallBold" numberOfLines={1} style={styles.name}>
+              {item.itemName}
+            </ThemedText>
+          </View>
+          {!!variant && (
+            <View style={[styles.variantBadge, { backgroundColor: theme.background }]}>
+              <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                {variant}
+              </ThemedText>
+            </View>
+          )}
+          {item.variants.length > 0 && (
+            <ThemedText type="small" themeColor="textSecondary">
+              {t('count.variantCount', { n: item.variants.length })}
+            </ThemedText>
+          )}
           <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
             {item.itemCode}
           </ThemedText>
@@ -593,29 +643,18 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
   },
-  tabs: {
-    gap: Spacing.two,
-    paddingVertical: Spacing.one,
-  },
-  tab: {
-    paddingHorizontal: Spacing.three,
-    height: 38,
-    borderRadius: Spacing.five,
+  hint: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing.two,
+    marginHorizontal: Spacing.four,
+    marginBottom: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
   },
-  // Fixed fontSize/lineHeight (tall enough for Khmer) so every tab is the same
-  // height regardless of script. includeFontPadding:false trims Android's extra
-  // vertical padding that otherwise makes Khmer rows taller.
-  tabText: {
-    fontSize: 13,
-    lineHeight: 22,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-  tabActive: {
-    color: '#ffffff',
-    fontWeight: '700',
+  hintText: {
+    flex: 1,
+    color: SHORT,
   },
   empty: {
     textAlign: 'center',
@@ -634,6 +673,23 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.four,
     gap: Spacing.three,
+  },
+  variantCard: {
+    marginLeft: Spacing.four,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+  },
+  name: {
+    flex: 1,
+  },
+  variantBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.half,
+    borderRadius: Spacing.two,
   },
   cardTop: {
     flexDirection: 'row',
@@ -704,11 +760,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  reopenBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.two,
+    height: 50,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   completeBtn: {
     flex: 1,
     height: 50,
     borderRadius: Spacing.three,
     backgroundColor: BRAND,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneNote: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.two,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
   },

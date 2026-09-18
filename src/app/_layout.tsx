@@ -54,7 +54,8 @@ function RootNavigator() {
         <Stack.Screen name="transfer-in-report" />
         <Stack.Screen name="stock-count/index" />
         <Stack.Screen name="stock-count/new" />
-        <Stack.Screen name="stock-count/[id]" />
+        <Stack.Screen name="stock-count/[id]/index" />
+        <Stack.Screen name="stock-count/[id]/[categoryId]" />
         <Stack.Screen name="stock-count/loss" />
         <Stack.Screen name="stock-adjustment/index" />
         <Stack.Screen name="stock-adjustment/[id]" />

@@ -129,7 +129,7 @@ export default function SettingsScreen() {
             icon="clipboard-outline"
             color="#30A46C"
             label={t('settings.row.stockCount')}
-            onPress={soon}
+            onPress={() => router.push('/stock-count')}
             theme={theme}
             last
           />
