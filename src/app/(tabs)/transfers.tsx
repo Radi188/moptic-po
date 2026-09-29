@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -130,6 +130,22 @@ export default function TransfersScreen() {
     return () => clearTimeout(t);
   }, [search, status, load]);
 
+  // Reload when returning from the form (new transfer / redo of a declined one).
+  const focusedOnce = useRef(false);
+  const filtersRef = useRef({ search, status });
+  useEffect(() => {
+    filtersRef.current = { search, status };
+  }, [search, status]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedOnce.current) {
+        focusedOnce.current = true;
+        return;
+      }
+      load(filtersRef.current.search, filtersRef.current.status, 1, false);
+    }, [load]),
+  );
+
   function loadMore() {
     if (loading || loadingMore || page >= lastPage) return;
     load(search, status, page + 1, true);
@@ -162,6 +178,11 @@ export default function TransfersScreen() {
   function editTransfer(id: string) {
     closeDetail();
     router.push({ pathname: '/transfer/[id]', params: { id } });
+  }
+
+  function redoTransfer(id: string) {
+    closeDetail();
+    router.push({ pathname: '/transfer/[id]', params: { id: 'new', redoFrom: id } });
   }
 
   async function decide(id: string, next: TransferStatus) {
@@ -299,6 +320,7 @@ export default function TransfersScreen() {
         onClose={closeDetail}
         onApprove={(id) => decide(id, 'approved')}
         onDecline={(id) => decide(id, 'declined')}
+        onRedo={redoTransfer}
       />
 
       <ListLoadingOverlay visible={loading && items.length > 0} />

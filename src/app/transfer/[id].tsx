@@ -17,7 +17,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { isApiConfigured } from '@/api/config';
 import { type ApiItem } from '@/api/items';
 import { getWarehouses, type ApiOption } from '@/api/purchase-orders';
-import { createTransfer, type CreateTransferBody } from '@/api/transfers';
+import { createTransfer, fetchTransfer, type CreateTransferBody } from '@/api/transfers';
 import { ItemSearchSheet } from '@/components/item-search-sheet';
 import { OptionSheet } from '@/components/option-sheet';
 import { ScreenHeader } from '@/components/screen-header';
@@ -46,7 +46,7 @@ function ymd(d: Date) {
 }
 
 export default function TransferFormScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, redoFrom } = useLocalSearchParams<{ id: string; redoFrom?: string }>();
   const router = useRouter();
   const theme = useTheme();
   const { session } = useAuth();
@@ -70,6 +70,38 @@ export default function TransferFormScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [redoReference, setRedoReference] = useState<string | null>(null);
+  const [redoLoading, setRedoLoading] = useState(isNew && !!redoFrom);
+
+  // Redo a declined transfer: prefill a new transfer with the same payload so
+  // the user can correct it (change qty, add or remove items) and resubmit.
+  useEffect(() => {
+    if (!isNew || !redoFrom) return;
+    let active = true;
+    fetchTransfer(redoFrom)
+      .then((source) => {
+        if (!active || !source) return;
+        setRedoReference(source.reference);
+        setFromWarehouse(source.fromWarehouse);
+        setToWarehouse(source.toWarehouse);
+        setDescription(source.description);
+        setItems(
+          source.items.map((item, index) => ({
+            ...item,
+            id: `tri-${Date.now()}-${index}`,
+          })),
+        );
+      })
+      .catch((e) => {
+        if (active) setError(e instanceof Error ? e.message : t('transferForm.redoLoadError'));
+      })
+      .finally(() => {
+        if (active) setRedoLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isNew, redoFrom, t]);
 
   // Load warehouse dropdown options (with ids) from the API.
   useEffect(() => {
@@ -233,9 +265,20 @@ export default function TransferFormScreen() {
     <ThemedView style={styles.container}>
       <ScreenHeader
         title={isNew ? t('transfers.title') : existing!.reference}
-        subtitle={isNew ? t('transferForm.newTitle') : t('transferForm.editTitle')}
+        subtitle={
+          redoReference
+            ? t('transferForm.redoTitle', { reference: redoReference })
+            : isNew
+              ? t('transferForm.newTitle')
+              : t('transferForm.editTitle')
+        }
         onBack={() => router.back()}
       />
+      {redoLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator color={theme.textSecondary} />
+        </View>
+      ) : (
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -343,6 +386,7 @@ export default function TransferFormScreen() {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
 
       <OptionSheet
         visible={!!sheet}

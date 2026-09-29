@@ -297,6 +297,8 @@ export const en = {
   'transferForm.createError': 'Failed to create transfer.',
   'transferForm.newTitle': 'New transfer',
   'transferForm.editTitle': 'Edit transfer',
+  'transferForm.redoTitle': 'Redo of {{reference}}',
+  'transferForm.redoLoadError': 'Failed to load the declined transfer.',
   'transferForm.selectFromTitle': 'From warehouse',
   'transferForm.selectToTitle': 'To warehouse',
 
@@ -571,6 +573,7 @@ export const en = {
   'transferDetails.items': 'Items ({{count}})',
   'transferDetails.sendToTelegram': 'Send report to Telegram',
   'transferDetails.statusNote': 'This transfer is {{status}}.',
+  'transferDetails.redo': 'Redo transfer',
 
   // Settings screen.
   'settings.title': 'Settings',
@@ -603,6 +606,13 @@ export const en = {
 
   'settings.signOut': 'Sign out',
   'settings.signOutConfirm': 'Are you sure you want to sign out?',
+  'settings.row.deleteAccount': 'Delete Account',
+  'settings.deleteAccountConfirm':
+    'This permanently deletes your account and personal data. This cannot be undone. Do you want to continue?',
+  'settings.deleteAccountFinal': 'Are you absolutely sure? Your account will be deleted right away.',
+  'settings.deleteAccountAction': 'Delete',
+  'settings.deleteAccountDone': 'Your account has been deleted.',
+  'settings.deleteAccountFailed': 'Could not delete account',
 
   // Appearance option labels.
   'appearance.system': 'System',
@@ -889,6 +899,8 @@ export const km: Record<TranslationKey, string> = {
   'transferForm.createError': 'មិនអាចបង្កើតការផ្ទេរបានទេ។',
   'transferForm.newTitle': 'ការផ្ទេរថ្មី',
   'transferForm.editTitle': 'កែសម្រួលការផ្ទេរ',
+  'transferForm.redoTitle': 'ធ្វើឡើងវិញពី {{reference}}',
+  'transferForm.redoLoadError': 'មិនអាចផ្ទុកការផ្ទេរដែលបានបដិសេធបានទេ។',
   'transferForm.selectFromTitle': 'ពីឃ្លាំង',
   'transferForm.selectToTitle': 'ទៅឃ្លាំង',
 
@@ -1153,6 +1165,7 @@ export const km: Record<TranslationKey, string> = {
   'transferDetails.items': 'ទំនិញ ({{count}})',
   'transferDetails.sendToTelegram': 'ផ្ញើរបាយការណ៍ទៅ Telegram',
   'transferDetails.statusNote': 'ការផ្ទេរនេះគឺ {{status}}។',
+  'transferDetails.redo': 'ធ្វើការផ្ទេរឡើងវិញ',
 
   'settings.title': 'ការកំណត់',
   'settings.guest': 'ភ្ញៀវ',
@@ -1184,6 +1197,13 @@ export const km: Record<TranslationKey, string> = {
 
   'settings.signOut': 'ចាកចេញ',
   'settings.signOutConfirm': 'តើអ្នកប្រាកដថាចង់ចាកចេញមែនទេ?',
+  'settings.row.deleteAccount': 'លុបគណនី',
+  'settings.deleteAccountConfirm':
+    'វានឹងលុបគណនី និងទិន្នន័យផ្ទាល់ខ្លួនរបស់អ្នកជាអចិន្ត្រៃយ៍។ មិនអាចត្រឡប់វិញបានទេ។ តើអ្នកចង់បន្តទេ?',
+  'settings.deleteAccountFinal': 'តើអ្នកប្រាកដទាំងស្រុងមែនទេ? គណនីរបស់អ្នកនឹងត្រូវលុបភ្លាមៗ។',
+  'settings.deleteAccountAction': 'លុប',
+  'settings.deleteAccountDone': 'គណនីរបស់អ្នកត្រូវបានលុប។',
+  'settings.deleteAccountFailed': 'មិនអាចលុបគណនីបានទេ',
 
   'appearance.system': 'ប្រព័ន្ធ',
   'appearance.light': 'ភ្លឺ',

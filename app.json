@@ -45,7 +45,20 @@
           "backgroundColor": "#A8867B"
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "M-Optic Stock uses your photo library so you can choose product photos (thumbnail and gallery images) when creating or editing an inventory item.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-image",
       [

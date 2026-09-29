@@ -50,6 +50,19 @@ export async function login(payload: LoginPayload): Promise<LoginResponse> {
   return data;
 }
 
+/**
+ * DELETE /account (relative to /api/v1/staff) — permanently deletes the signed-in
+ * user's account and personal data (App Store guideline 5.1.1(v)), then clears
+ * the stored token.
+ *
+ * BACKEND: the route must hard-delete (not deactivate) the authenticated user,
+ * revoke their tokens and push tokens, and return 2xx.
+ */
+export async function deleteAccount(): Promise<void> {
+  await api.delete('/account');
+  await tokenStore.clear();
+}
+
 /** Clears the stored token. */
 export async function logout(): Promise<void> {
   await tokenStore.clear();

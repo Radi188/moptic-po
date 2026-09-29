@@ -46,13 +46,14 @@ export default function SettingsScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { isTablet } = useResponsive();
-  const { session, switchBranch, signOut } = useAuth();
+  const { session, switchBranch, signOut, deleteAccount } = useAuth();
   const { preference, setPreference } = useThemePreference();
   const { language, setLanguage, t } = useTranslation();
   const km = language === 'km';
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const appearanceLabels: Record<ThemePreference, string> = {
     system: t('appearance.system'),
@@ -72,6 +73,42 @@ export default function SettingsScreen() {
       { text: t('common.cancel'), style: 'cancel' },
       { text: t('settings.signOut'), style: 'destructive', onPress: () => signOut() },
     ]);
+  }
+
+  // Two confirmations before an irreversible delete (App Store 5.1.1(v)).
+  function confirmDeleteAccount() {
+    Alert.alert(t('settings.row.deleteAccount'), t('settings.deleteAccountConfirm'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('settings.deleteAccountAction'),
+        style: 'destructive',
+        onPress: () =>
+          Alert.alert(t('settings.row.deleteAccount'), t('settings.deleteAccountFinal'), [
+            { text: t('common.cancel'), style: 'cancel' },
+            {
+              text: t('settings.deleteAccountAction'),
+              style: 'destructive',
+              onPress: runDeleteAccount,
+            },
+          ]),
+      },
+    ]);
+  }
+
+  async function runDeleteAccount() {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      Alert.alert(t('settings.deleteAccountDone'));
+    } catch (e) {
+      Alert.alert(
+        t('settings.deleteAccountFailed'),
+        e instanceof Error ? e.message : String(e),
+      );
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const soon = () => Alert.alert(t('common.comingSoon'), t('common.comingSoonBody'));
@@ -174,6 +211,13 @@ export default function SettingsScreen() {
             color="#8E4EC6"
             label={t('settings.row.profile')}
             onPress={soon}
+            theme={theme}
+          />
+          <SettingRow
+            icon="trash-outline"
+            color={DANGER}
+            label={t('settings.row.deleteAccount')}
+            onPress={confirmDeleteAccount}
             theme={theme}
             last
           />

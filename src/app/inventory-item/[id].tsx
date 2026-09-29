@@ -217,9 +217,8 @@ export default function InventoryItemFormScreen() {
   };
   const activeSheet = sheet ? sheets[sheet] : null;
 
+  // The system photo picker needs no library permission, so none is requested.
   async function pickThumbnail() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.6,
@@ -228,8 +227,6 @@ export default function InventoryItemFormScreen() {
   }
 
   async function addGalleryImages() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,

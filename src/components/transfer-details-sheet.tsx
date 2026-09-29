@@ -32,6 +32,8 @@ type Props = {
   onClose: () => void;
   onApprove: (id: string) => void;
   onDecline: (id: string) => void;
+  /** Start a new transfer prefilled from this (declined) one. */
+  onRedo?: (id: string) => void;
 };
 
 export function TransferDetailsSheet({
@@ -41,6 +43,7 @@ export function TransferDetailsSheet({
   onClose,
   onApprove,
   onDecline,
+  onRedo,
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -176,9 +179,19 @@ export function TransferDetailsSheet({
                   </Pressable>
                 </View>
               ) : (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
-                  {t('transferDetails.statusNote', { status: t(`status.${transfer.status}`) })}
-                </ThemedText>
+                <>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.note}>
+                    {t('transferDetails.statusNote', { status: t(`status.${transfer.status}`) })}
+                  </ThemedText>
+                  {transfer.status === 'declined' && onRedo ? (
+                    <Pressable
+                      onPress={() => onRedo(transfer.id)}
+                      style={({ pressed }) => [styles.redoButton, pressed && styles.pressed]}>
+                      <Ionicons name="refresh" size={18} color="#ffffff" />
+                      <ThemedText style={styles.approveText}>{t('transferDetails.redo')}</ThemedText>
+                    </Pressable>
+                  ) : null}
+                </>
               )}
             </>
           ) : null}
@@ -456,6 +469,15 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: Spacing.three,
     backgroundColor: GREEN,
+  },
+  redoButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
+    height: 50,
+    borderRadius: Spacing.three,
+    backgroundColor: '#232843',
   },
   approveText: {
     color: '#ffffff',

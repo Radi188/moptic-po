@@ -1,6 +1,6 @@
 import { createContext, use, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 
-import { login, logout, type ApiBranch } from '@/api/auth';
+import { deleteAccount as deleteAccountRequest, login, logout, type ApiBranch } from '@/api/auth';
 import { setUnauthorizedHandler } from '@/api/client';
 import { isApiConfigured } from '@/api/config';
 import { tokenStore } from '@/auth/tokenStore';
@@ -30,6 +30,8 @@ type AuthContextValue = {
   quickSignIn: (name: string, password: string) => Promise<void>;
   switchBranch: (branch: Branch) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Permanently deletes the account on the server, then clears the local session. */
+  deleteAccount: () => Promise<void>;
 };
 
 function toBranch(branch: ApiBranch): Branch {
@@ -175,6 +177,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setSession(next);
       },
       async signOut() {
+        await logout();
+        await storage.removeItem(SESSION_KEY);
+        setSession(null);
+        setQuickLoginRequired(false);
+      },
+      async deleteAccount() {
+        if (isApiConfigured()) await deleteAccountRequest();
         await logout();
         await storage.removeItem(SESSION_KEY);
         setSession(null);
