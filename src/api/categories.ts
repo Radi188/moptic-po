@@ -16,6 +16,7 @@ export type CategoryOption = {
   id: string;
   label: string;
   name: string;
+  nameKh: string;
   /** Name of the parent (main) category this sub-category belongs to. */
   parent: string;
 };
@@ -64,7 +65,13 @@ export function toCategoryOptions(categories: Category[]): CategoryOption[] {
   const rows: CategoryOption[] = [];
   for (const cat of categories) {
     for (const sub of cat.subCategories) {
-      rows.push({ id: sub.id, label: sub.name, name: sub.name, parent: cat.name });
+      rows.push({
+        id: sub.id,
+        label: sub.name,
+        name: sub.name,
+        nameKh: sub.nameKh,
+        parent: cat.name,
+      });
     }
   }
 
@@ -84,4 +91,28 @@ export function toCategoryOptions(categories: Category[]): CategoryOption[] {
   }
 
   return rows;
+}
+
+// Lowercase and drop whitespace + zero-width characters, so "Cartier" matches
+// "ដងCartier" and "ដង Cartier", and stray U+200B in Khmer names don't break it.
+function normalizeSearch(value: string): string {
+  return value.toLowerCase().replace(/[\s\u200B-\u200D\uFEFF]+/g, '');
+}
+
+/**
+ * Client-side category search. The backend `?search=` only matches the parent
+ * category name, so a sub-category like "ដងCartier" isn't found by "Cartier".
+ * Matches anywhere in the sub-category name (EN/KH) or its parent's name.
+ */
+export function filterCategoryOptions(
+  options: CategoryOption[],
+  search: string,
+): CategoryOption[] {
+  const term = normalizeSearch(search);
+  if (!term) return options;
+  return options.filter((o) =>
+    [o.name, o.nameKh, o.parent].some((field) =>
+      normalizeSearch(field).includes(term),
+    ),
+  );
 }

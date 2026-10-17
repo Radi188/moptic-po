@@ -14,6 +14,8 @@ export type InventoryProduct = {
   /** Backend category id selected from /api/v1/categories (for posting). */
   categoryId?: string;
   brand: string;
+  /** Backend brand id selected from /api/v1/brands (for posting). */
+  brandId?: string;
   stockType: string;
   barcode: string;
   cost: number;

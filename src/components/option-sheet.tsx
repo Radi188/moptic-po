@@ -1,4 +1,12 @@
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -46,7 +54,12 @@ export function OptionSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      {/* A Modal is its own window, so the screen's keyboard handling doesn't
+          reach it — lift the sheet above the keyboard here (both platforms,
+          since Android is edge-to-edge and won't resize the modal itself). */}
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <ThemedView style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.four }]}>
           <ThemedView style={styles.handle} type="backgroundSelected" />
@@ -73,7 +86,10 @@ export function OptionSheet({
               )}
             </ThemedView>
           )}
-          <ScrollView bounces={false} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag">
             {options.length === 0 && (
               <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
                 {emptyTextResolved}
@@ -99,7 +115,7 @@ export function OptionSheet({
             })}
           </ScrollView>
         </ThemedView>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

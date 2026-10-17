@@ -24,8 +24,9 @@ type RawItem = {
   category_name?: string;
   category_id?: number | string;
   stock_type?: string;
-  brand?: string;
+  brand?: string | { id?: number | string; name?: string } | null;
   brand_name?: string;
+  brand_id?: number | string | null;
   barcode?: string;
   purchase_cost?: string | number;
   cost?: string | number;
@@ -87,7 +88,17 @@ function mapItem(row: RawItem): InventoryProduct {
     nameKhmer: "",
     category: row.category ?? row.category_name ?? "",
     categoryId: row.category_id != null ? String(row.category_id) : undefined,
-    brand: row.brand ?? row.brand_name ?? "",
+    // `brand` may be a plain name or an eager-loaded { id, name } relation.
+    brand:
+      (typeof row.brand === "object" ? row.brand?.name : row.brand) ??
+      row.brand_name ??
+      "",
+    brandId:
+      row.brand_id != null
+        ? String(row.brand_id)
+        : typeof row.brand === "object" && row.brand?.id != null
+          ? String(row.brand.id)
+          : undefined,
     // Backend stock_type is a single letter: 'N' = Not Stock, else Stock.
     stockType: row.stock_type === "N" ? "Not Stock" : "Stock",
     barcode: row.barcode ?? "",

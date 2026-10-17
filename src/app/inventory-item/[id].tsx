@@ -15,8 +15,10 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 
+import { fetchBrands, type Brand } from "@/api/brands";
 import {
   fetchCategories,
+  filterCategoryOptions,
   toCategoryOptions,
   type CategoryOption,
 } from "@/api/categories";
@@ -33,7 +35,6 @@ import { useAuth } from "@/contexts/auth";
 import { useTranslation } from "@/contexts/i18n";
 import {
   addProduct,
-  BRANDS,
   getProduct,
   STOCK_TYPES,
   updateProduct,
@@ -91,6 +92,9 @@ export default function InventoryItemFormScreen() {
     existing?.descriptionKhmer ?? "",
   );
   const [brand, setBrand] = useState(existing?.brand ?? "");
+  const [brandId, setBrandId] = useState(existing?.brandId ?? "");
+  const [brandOptions, setBrandOptions] = useState<Brand[]>([]);
+  const [brandsError, setBrandsError] = useState<string | null>(null);
   const [status, setStatus] = useState<ProductStatus>(
     existing?.status ?? "active",
   );
@@ -117,10 +121,10 @@ export default function InventoryItemFormScreen() {
   // item shows up in the branch-scoped inventory list). We default to the first.
   const [warehouses, setWarehouses] = useState<ApiOption[]>([]);
 
-  // Load sub-categories from the backend, optionally filtered by the search term.
-  const loadCategories = useCallback(async (search?: string) => {
+  // Load all sub-categories once; searching filters them locally (see below).
+  const loadCategories = useCallback(async () => {
     try {
-      const options = toCategoryOptions(await fetchCategories(search));
+      const options = toCategoryOptions(await fetchCategories());
       setCategoryOptions(options);
       setCategoriesError(null);
       return options;
@@ -142,12 +146,36 @@ export default function InventoryItemFormScreen() {
     });
   }, [loadCategories, existing?.category, existing?.categoryId]);
 
-  // Re-query the backend as the user types (debounced) while the picker is open.
+  // Filter locally: the backend search only matches parent category names, so
+  // e.g. "Cartier" would miss the "ដងCartier" sub-category.
+  const filteredCategoryOptions = useMemo(
+    () => filterCategoryOptions(categoryOptions, categorySearch),
+    [categoryOptions, categorySearch],
+  );
+
+  // Load brands from the backend (the same list the web dashboard manages) and
+  // resolve an existing product's saved brand name back to its id.
   useEffect(() => {
-    if (sheet !== "category") return;
-    const handle = setTimeout(() => loadCategories(categorySearch), 300);
-    return () => clearTimeout(handle);
-  }, [categorySearch, sheet, loadCategories]);
+    let active = true;
+    fetchBrands()
+      .then((brands) => {
+        if (!active) return;
+        setBrandOptions(brands);
+        setBrandsError(null);
+        if (existing?.brand && !existing.brandId) {
+          const wanted = existing.brand.trim().toLowerCase();
+          const match = brands.find((b) => b.name.toLowerCase() === wanted);
+          if (match) setBrandId(match.id);
+        }
+      })
+      .catch((err) => {
+        if (active)
+          setBrandsError((err as Error).message || "Could not load brands.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [existing?.brand, existing?.brandId]);
 
   // Load warehouses once (create flow) so we can seed initial stock by default.
   useEffect(() => {
@@ -187,9 +215,13 @@ export default function InventoryItemFormScreen() {
   > = {
     brand: {
       title: t("invForm.selectBrand"),
-      options: BRANDS,
-      selected: brand,
-      onSelect: setBrand,
+      options: brandOptions.map((b) => b.name),
+      selected: brandOptions.find((b) => b.id === brandId)?.name ?? brand,
+      onSelect: (name) => {
+        const picked = brandOptions.find((b) => b.name === name);
+        setBrand(picked?.name ?? name);
+        setBrandId(picked?.id ?? "");
+      },
     },
     status: {
       title: t("invForm.itemStatus"),
@@ -205,7 +237,7 @@ export default function InventoryItemFormScreen() {
     },
     category: {
       title: t("filters.selectCategory"),
-      options: categoryOptions.map((o) => o.label),
+      options: filteredCategoryOptions.map((o) => o.label),
       selected:
         categoryOptions.find((o) => o.id === categoryId)?.label ?? category,
       onSelect: (label) => {
@@ -265,6 +297,7 @@ export default function InventoryItemFormScreen() {
       category,
       categoryId,
       brand,
+      brandId,
       stockType,
       barcode: barcode.trim(),
       cost: parseFloat(cost) || 0,
@@ -302,6 +335,7 @@ export default function InventoryItemFormScreen() {
           price: parseFloat(price) || 0,
           cost: parseFloat(cost) || 0,
           category_id: Number(categoryId),
+          brand_id: brandId ? Number(brandId) : undefined,
           alert_stock: parseInt(alertStock, 10) || 0,
           stock_type: STOCK_TYPE_CODES[stockType],
           // Send status so the update doesn't clear it (which would turn the
@@ -335,6 +369,7 @@ export default function InventoryItemFormScreen() {
         price: parseFloat(price) || 0,
         cost: parseFloat(cost) || 0,
         category_id: Number(categoryId),
+        brand_id: brandId ? Number(brandId) : undefined,
         alert_stock: parseInt(alertStock, 10) || 0,
         stock_type: STOCK_TYPE_CODES[stockType],
         status: status === "active" ? 1 : 0,
@@ -691,7 +726,11 @@ export default function InventoryItemFormScreen() {
         searchValue={categorySearch}
         onSearchChange={setCategorySearch}
         searchPlaceholder={t("invForm.searchCategories")}
-        emptyText={categoriesError ?? t("invForm.noCategories")}
+        emptyText={
+          sheet === "brand"
+            ? (brandsError ?? undefined)
+            : (categoriesError ?? t("invForm.noCategories"))
+        }
         onSelect={(value) => {
           activeSheet?.onSelect(value);
           setError(null);
