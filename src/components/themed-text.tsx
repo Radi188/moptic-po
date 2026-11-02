@@ -10,10 +10,20 @@ export type ThemedTextProps = TextProps & {
   themeColor?: ThemeColor;
 };
 
+// Khmer block (U+1780–U+17FF) plus Khmer Symbols (U+19E0–U+19FF).
+const KHMER = /[\u1780-\u17FF\u19E0-\u19FF]/;
+
+/** True when the text children contain any Khmer, e.g. a Khmer branch name shown in English mode. */
+function hasKhmer(children: React.ReactNode): boolean {
+  if (typeof children === 'string') return KHMER.test(children);
+  if (Array.isArray(children)) return children.some(hasKhmer);
+  return false;
+}
+
 const androidNoFontPadding =
   Platform.OS === 'android' ? ({ includeFontPadding: false } as const) : null;
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
+export function ThemedText({ style, type = 'default', themeColor, children, ...rest }: ThemedTextProps) {
   const theme = useTheme();
   const { isTablet } = useResponsive();
   const { language } = useTranslation();
@@ -24,8 +34,10 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
   // Khmer stacks subscript consonants and diacritics below the baseline, so it
   // needs more vertical room than Latin or it clips and sits off-center next to
   // icons. When Khmer is active, override just the lineHeight per type; English
-  // keeps its tighter, purpose-tuned spacing.
-  const km = language === 'km' ? (isTablet ? khmerTabletLineHeights : khmerLineHeights) : null;
+  // keeps its tighter, purpose-tuned spacing. Khmer *content* (branch or product
+  // names from the backend) gets the same treatment even in English mode.
+  const khmer = language === 'km' || hasKhmer(children);
+  const km = khmer ? (isTablet ? khmerTabletLineHeights : khmerLineHeights) : null;
 
   return (
     <Text
@@ -48,8 +60,9 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         km && km[type],
         style,
       ]}
-      {...rest}
-    />
+      {...rest}>
+      {children}
+    </Text>
   );
 }
 
