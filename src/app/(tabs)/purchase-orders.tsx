@@ -65,6 +65,7 @@ export default function PurchaseOrdersScreen() {
   const [search, setSearch] = useState("");
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState(() => {
     const d = new Date();
     d.setDate(1);
@@ -95,7 +96,8 @@ export default function PurchaseOrdersScreen() {
   useEffect(() => {
     getWarehouses()
       .then(setWarehouseOptions)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setWarehousesLoading(false));
   }, []);
 
   // Resolve a warehouse id (all the list rows carry) to its display name.
@@ -518,6 +520,7 @@ export default function PurchaseOrdersScreen() {
         visible={warehouseSheet}
         title={t("filters.selectWarehouse")}
         options={[t("filters.allWarehouses"), ...warehouseOptions.map((o) => o.name)]}
+        loading={warehousesLoading}
         selected={warehouse?.name ?? t("filters.allWarehouses")}
         onSelect={(value) => {
           setWarehouse(

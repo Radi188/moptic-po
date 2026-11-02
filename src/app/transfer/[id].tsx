@@ -70,6 +70,7 @@ export default function TransferFormScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [redoReference, setRedoReference] = useState<string | null>(null);
   const [redoLoading, setRedoLoading] = useState(isNew && !!redoFrom);
 
@@ -110,7 +111,10 @@ export default function TransferFormScreen() {
       .then((options) => {
         if (active) setWarehouseOptions(options);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setWarehousesLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -392,6 +396,7 @@ export default function TransferFormScreen() {
         visible={!!sheet}
         title={activeSheet?.title ?? ''}
         options={warehouseOptions.map((option) => option.name)}
+        loading={warehousesLoading}
         selected={activeSheet?.value}
         onSelect={(value) => {
           activeSheet?.set(value);

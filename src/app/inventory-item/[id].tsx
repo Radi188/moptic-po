@@ -95,6 +95,7 @@ export default function InventoryItemFormScreen() {
   const [brandId, setBrandId] = useState(existing?.brandId ?? "");
   const [brandOptions, setBrandOptions] = useState<Brand[]>([]);
   const [brandsError, setBrandsError] = useState<string | null>(null);
+  const [brandsLoading, setBrandsLoading] = useState(true);
   const [status, setStatus] = useState<ProductStatus>(
     existing?.status ?? "active",
   );
@@ -103,6 +104,7 @@ export default function InventoryItemFormScreen() {
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? "");
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categorySearch, setCategorySearch] = useState("");
   const [cost, setCost] = useState(existing ? String(existing.cost) : "0");
   const [price, setPrice] = useState(existing ? String(existing.price) : "0");
@@ -123,6 +125,7 @@ export default function InventoryItemFormScreen() {
 
   // Load all sub-categories once; searching filters them locally (see below).
   const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true);
     try {
       const options = toCategoryOptions(await fetchCategories());
       setCategoryOptions(options);
@@ -133,6 +136,8 @@ export default function InventoryItemFormScreen() {
         (err as Error).message || "Could not load categories.",
       );
       return [];
+    } finally {
+      setCategoriesLoading(false);
     }
   }, []);
 
@@ -171,6 +176,9 @@ export default function InventoryItemFormScreen() {
       .catch((err) => {
         if (active)
           setBrandsError((err as Error).message || "Could not load brands.");
+      })
+      .finally(() => {
+        if (active) setBrandsLoading(false);
       });
     return () => {
       active = false;
@@ -580,7 +588,7 @@ export default function InventoryItemFormScreen() {
                 placeholder={
                   categoriesError
                     ? t("invForm.categoriesError")
-                    : categoryOptions.length === 0
+                    : categoriesLoading
                       ? t("invForm.categoriesLoading")
                       : t("filters.selectCategory")
                 }
@@ -723,6 +731,10 @@ export default function InventoryItemFormScreen() {
         options={activeSheet?.options ?? []}
         selected={activeSheet?.selected}
         searchable={sheet === "category"}
+        loading={
+          (sheet === "category" && categoriesLoading) ||
+          (sheet === "brand" && brandsLoading)
+        }
         searchValue={categorySearch}
         onSearchChange={setCategorySearch}
         searchPlaceholder={t("invForm.searchCategories")}

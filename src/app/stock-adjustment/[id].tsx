@@ -102,6 +102,7 @@ function AdjustmentForm() {
   const [lines, setLines] = useState<AdjustLine[]>([]);
 
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [warehouseSheet, setWarehouseSheet] = useState(false);
   const [itemSheet, setItemSheet] = useState(false);
   // Code of the line whose reason picker is open (null = closed).
@@ -118,7 +119,10 @@ function AdjustmentForm() {
       .then((options) => {
         if (active) setWarehouseOptions(options);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setWarehousesLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -307,6 +311,7 @@ function AdjustmentForm() {
         visible={warehouseSheet}
         title={t('filters.selectWarehouse')}
         options={warehouseOptions.map((option) => option.name)}
+        loading={warehousesLoading}
         selected={warehouse}
         onSelect={(value) => {
           setWarehouse(value);

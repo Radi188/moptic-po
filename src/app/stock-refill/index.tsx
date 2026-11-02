@@ -65,6 +65,7 @@ export default function StockRefillScreen() {
 
   const [source, setSource] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [sourceSheet, setSourceSheet] = useState(false);
 
   const [summaries, setSummaries] = useState<Record<string, BranchSalesSummary>>({});
@@ -84,7 +85,8 @@ export default function StockRefillScreen() {
           options.find((o) => o.name.toLowerCase().includes('online'));
         setSource((prev) => prev ?? preferred ?? options[0] ?? null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setWarehousesLoading(false));
   }, []);
 
   const load = useCallback(
@@ -289,6 +291,7 @@ export default function StockRefillScreen() {
         visible={sourceSheet}
         title={t('refill.sourceWarehouse')}
         options={warehouseOptions.map((o) => o.name)}
+        loading={warehousesLoading}
         selected={source?.name}
         onSelect={(value) => {
           setSource(warehouseOptions.find((o) => o.name === value) ?? null);

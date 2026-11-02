@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -218,6 +219,7 @@ export default function SettingsScreen() {
             color={DANGER}
             label={t('settings.row.deleteAccount')}
             onPress={confirmDeleteAccount}
+            loading={deleting}
             theme={theme}
             last
           />
@@ -346,6 +348,7 @@ function SettingRow({
   onPress,
   theme,
   last,
+  loading,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
@@ -354,9 +357,14 @@ function SettingRow({
   onPress: () => void;
   theme: ReturnType<typeof useTheme>;
   last?: boolean;
+  /** Shows a spinner in place of the chevron and blocks taps while a request runs. */
+  loading?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.pressed}>
+    <Pressable
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => (pressed || loading) && styles.pressed}>
       <View
         style={[styles.row, !last && { borderBottomColor: theme.background, borderBottomWidth: 1 }]}>
         <View style={[styles.rowIcon, { backgroundColor: `${color}22` }]}>
@@ -370,7 +378,11 @@ function SettingRow({
             {value}
           </ThemedText>
         ) : null}
-        <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+        {loading ? (
+          <ActivityIndicator size="small" color={theme.textSecondary} />
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+        )}
       </View>
     </Pressable>
   );

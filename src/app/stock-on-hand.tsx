@@ -101,6 +101,7 @@ export default function StockOnHandScreen() {
   const [selectedItem, setSelectedItem] = useState<StockOnHandItem | null>(null);
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [warehouseSheet, setWarehouseSheet] = useState(false);
   const [category, setCategory] = useState<ApiOption | null>(null);
   // Accumulated from loaded rows; never shrinks so filtering keeps all options.
@@ -129,7 +130,8 @@ export default function StockOnHandScreen() {
         setWarehouseOptions(options);
         setWarehouse((prev) => prev ?? options[0] ?? null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setWarehousesLoading(false));
   }, []);
 
   // Summary totals (re-fetch when the warehouse changes).
@@ -392,6 +394,7 @@ export default function StockOnHandScreen() {
         visible={warehouseSheet}
         title={t("filters.selectWarehouse")}
         options={[ALL_WAREHOUSES, ...warehouseOptions.map((o) => o.name)]}
+        loading={warehousesLoading}
         selected={warehouse?.name ?? ALL_WAREHOUSES}
         onSelect={(value) => {
           setWarehouse(

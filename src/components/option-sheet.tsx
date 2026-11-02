@@ -1,4 +1,5 @@
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -31,6 +32,8 @@ type Props = {
   searchPlaceholder?: string;
   /** Message shown when there are no options (e.g. no search results). */
   emptyText?: string;
+  /** Options are still being fetched — show a spinner (and hold back the empty text). */
+  loading?: boolean;
 };
 
 export function OptionSheet({
@@ -45,6 +48,7 @@ export function OptionSheet({
   onSearchChange,
   searchPlaceholder,
   emptyText,
+  loading,
 }: Props) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -90,7 +94,7 @@ export function OptionSheet({
             bounces={false}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag">
-            {options.length === 0 && (
+            {!loading && options.length === 0 && (
               <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
                 {emptyTextResolved}
               </ThemedText>
@@ -113,6 +117,7 @@ export function OptionSheet({
                 </Pressable>
               );
             })}
+            {loading && <ActivityIndicator color={theme.textSecondary} style={styles.loader} />}
           </ScrollView>
         </ThemedView>
       </KeyboardAvoidingView>
@@ -159,6 +164,9 @@ const styles = StyleSheet.create({
   },
   empty: {
     textAlign: 'center',
+    paddingVertical: Spacing.four,
+  },
+  loader: {
     paddingVertical: Spacing.four,
   },
   option: {

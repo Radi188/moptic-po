@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { formatMoney } from '@/data/inventory';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { ListLoadingOverlay } from '@/components/list-loading-overlay';
 import { SkeletonList } from '@/components/skeleton';
 import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
@@ -123,6 +124,8 @@ export default function LossSummaryScreen() {
           )
         }
       />
+
+      <ListLoadingOverlay visible={loading && !refreshing && rows.length > 0} />
     </ThemedView>
   );
 }

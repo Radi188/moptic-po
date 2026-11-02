@@ -25,6 +25,7 @@ import {
 } from '@/api/sales-summary';
 import { BranchPickerSheet } from '@/components/branch-picker-sheet';
 import { ScreenHeader } from '@/components/screen-header';
+import { ListLoadingOverlay } from '@/components/list-loading-overlay';
 import { SkeletonList, SkeletonStatGrid } from '@/components/skeleton';
 import { StatCard } from '@/components/stat-card';
 import { ThemedText } from '@/components/themed-text';
@@ -392,6 +393,8 @@ export default function SaleSummaryReportScreen() {
           ) : null
         }
       />
+
+      <ListLoadingOverlay visible={loading && !refreshing && categories.length > 0} />
     </ThemedView>
   );
 }

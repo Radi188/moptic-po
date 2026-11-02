@@ -88,6 +88,7 @@ export default function PurchaseOrderFormScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [vendorOptions, setVendorOptions] = useState<ApiOption[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(true);
 
   // Load vendor + warehouse dropdowns from the API (falls back to mock data).
   useEffect(() => {
@@ -98,7 +99,10 @@ export default function PurchaseOrderFormScreen() {
         setVendorOptions(vendors);
         setWarehouseOptions(warehouses);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setOptionsLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -421,6 +425,7 @@ export default function PurchaseOrderFormScreen() {
         visible={vendorSheet}
         title={t('poForm.selectVendorTitle')}
         options={vendorOptions.map((option) => option.name)}
+        loading={optionsLoading}
         selected={vendor}
         onSelect={(value) => {
           setVendor(value);
@@ -433,6 +438,7 @@ export default function PurchaseOrderFormScreen() {
         visible={warehouseSheet}
         title={t('filters.selectWarehouse')}
         options={warehouseOptions.map((option) => option.name)}
+        loading={optionsLoading}
         selected={warehouse}
         onSelect={(value) => {
           setWarehouse(value);

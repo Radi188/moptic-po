@@ -19,6 +19,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { fetchTransfersIn, type TransferInCategory, type TransferInItem } from '@/api/transfers-in';
 import { BranchPickerSheet } from '@/components/branch-picker-sheet';
 import { ScreenHeader } from '@/components/screen-header';
+import { ListLoadingOverlay } from '@/components/list-loading-overlay';
 import { SkeletonList } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -277,6 +278,8 @@ export default function TransferInReportScreen() {
           )
         }
       />
+
+      <ListLoadingOverlay visible={loading && !refreshing && categories.length > 0} />
     </ThemedView>
   );
 }

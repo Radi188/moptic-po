@@ -40,6 +40,7 @@ export default function NewStockCountScreen() {
 
   const [warehouse, setWarehouse] = useState<ApiOption | null>(null);
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [warehouseSheet, setWarehouseSheet] = useState(false);
   // Off by default: a physical count should cover everything on the shelf,
   // including items the system currently shows as zero. Ticking it narrows the
@@ -55,7 +56,8 @@ export default function NewStockCountScreen() {
         setWarehouseOptions(options);
         setWarehouse((prev) => prev ?? options[0] ?? null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setWarehousesLoading(false));
   }, []);
 
   async function handleStart() {
@@ -174,6 +176,7 @@ export default function NewStockCountScreen() {
         visible={warehouseSheet}
         title={t('filters.selectWarehouse')}
         options={warehouseOptions.map((o) => o.name)}
+        loading={warehousesLoading}
         selected={warehouse?.name}
         onSelect={(value) => {
           setWarehouse(warehouseOptions.find((o) => o.name === value) ?? null);

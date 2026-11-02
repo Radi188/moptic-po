@@ -102,6 +102,7 @@ export default function BranchRefillScreen() {
   // warehouse list (NOT the branch id). It defaults to a name match but stays
   // editable so the user can correct it before transferring.
   const [warehouseOptions, setWarehouseOptions] = useState<ApiOption[]>([]);
+  const [warehousesLoading, setWarehousesLoading] = useState(true);
   const [destination, setDestination] = useState<ApiOption | null>(null);
   const [destSheet, setDestSheet] = useState(false);
 
@@ -115,7 +116,10 @@ export default function BranchRefillScreen() {
           (prev) => prev ?? findBranchWarehouse(params.branchName, options, params.sourceId),
         );
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setWarehousesLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -518,6 +522,7 @@ export default function BranchRefillScreen() {
         visible={destSheet}
         title={t('refill.destWarehouse')}
         options={warehouseOptions.filter((o) => o.id !== params.sourceId).map((o) => o.name)}
+        loading={warehousesLoading}
         selected={destination?.name}
         onSelect={(value) => {
           setDestination(warehouseOptions.find((o) => o.name === value) ?? null);
