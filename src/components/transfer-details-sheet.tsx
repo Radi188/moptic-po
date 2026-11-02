@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,8 +30,9 @@ type Props = {
   loading?: boolean;
   transfer: StockTransfer | null;
   onClose: () => void;
-  onApprove: (id: string) => void;
-  onDecline: (id: string) => void;
+  /** Resolves true on success, after which the sheet closes itself. */
+  onApprove: (id: string) => Promise<boolean>;
+  onDecline: (id: string) => Promise<boolean>;
   /** Start a new transfer prefilled from this (declined) one. */
   onRedo?: (id: string) => void;
 };
@@ -50,6 +51,10 @@ export function TransferDetailsSheet({
   const { session } = useAuth();
   const { t } = useTranslation();
   const [sending, setSending] = useState(false);
+  // Which decision request is in flight, so the buttons show progress and
+  // can't fire a second approve/decline while the first is still running.
+  const [deciding, setDeciding] = useState<'approve' | 'decline' | null>(null);
+  const [progress, setProgress] = useState(0);
   const meta = transfer ? STATUS_META[transfer.status] : null;
   const editable = transfer ? canEditTransfer(transfer.status) : false;
 
@@ -85,6 +90,31 @@ export function TransferDetailsSheet({
     } finally {
       setSending(false);
     }
+  }
+
+  // The API reports no real progress, so the bar is an estimate: it eases
+  // toward 95% while the request runs and only hits 100% once it succeeds.
+  useEffect(() => {
+    if (!deciding) return;
+    const timer = setInterval(() => {
+      setProgress((p) => (p >= 95 ? p : p + (95 - p) * 0.02));
+    }, 100);
+    return () => clearInterval(timer);
+  }, [deciding]);
+
+  async function handleDecide(kind: 'approve' | 'decline') {
+    if (!transfer || deciding) return;
+    setProgress(0);
+    setDeciding(kind);
+    const ok = await (kind === 'approve' ? onApprove(transfer.id) : onDecline(transfer.id));
+    if (ok) {
+      setProgress(100);
+      // Let the full bar show briefly before the sheet closes.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      onClose();
+    }
+    setDeciding(null);
+    setProgress(0);
   }
 
   return (
@@ -163,16 +193,38 @@ export function TransferDetailsSheet({
                 )}
               </Pressable>
 
-              {editable ? (
+              {editable && deciding ? (
+                <View style={styles.progressWrap}>
+                  <View style={styles.progressLabelRow}>
+                    <ActivityIndicator size="small" color={deciding === 'approve' ? GREEN : DANGER} />
+                    <ThemedText type="smallBold">
+                      {t(deciding === 'approve' ? 'transferDetails.approving' : 'transferDetails.declining', {
+                        percent: Math.round(progress),
+                      })}
+                    </ThemedText>
+                  </View>
+                  <ThemedView type="backgroundElement" style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          width: `${progress}%`,
+                          backgroundColor: deciding === 'approve' ? GREEN : DANGER,
+                        },
+                      ]}
+                    />
+                  </ThemedView>
+                </View>
+              ) : editable ? (
                 <View style={styles.actions}>
                   <Pressable
-                    onPress={() => onDecline(transfer.id)}
+                    onPress={() => handleDecide('decline')}
                     style={({ pressed }) => [styles.declineButton, pressed && styles.pressed]}>
                     <Ionicons name="close" size={18} color={DANGER} />
                     <ThemedText style={[styles.actionText, { color: DANGER }]}>{t('common.decline')}</ThemedText>
                   </Pressable>
                   <Pressable
-                    onPress={() => onApprove(transfer.id)}
+                    onPress={() => handleDecide('approve')}
                     style={({ pressed }) => [styles.approveButton, pressed && styles.pressed]}>
                     <Ionicons name="checkmark" size={18} color="#ffffff" />
                     <ThemedText style={styles.approveText}>{t('common.approve')}</ThemedText>
@@ -449,6 +501,25 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: Spacing.three,
+  },
+  progressWrap: {
+    height: 50,
+    justifyContent: 'center',
+    gap: Spacing.two,
+  },
+  progressLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
   },
   declineButton: {
     flexDirection: 'row',

@@ -238,13 +238,19 @@ export async function createTransfer(
   return data;
 }
 
+// Approving/rejecting moves stock server-side and can be slow, so give it
+// longer than the client-wide 30s. The gateway still cuts off at ~60s (504).
+const DECISION_TIMEOUT_MS = 90000;
+
 /** POST /stock-transfers/{id}/approve */
 export async function approveTransfer(id: string): Promise<void> {
   if (!isApiConfigured()) {
     setLocalTransferStatus(id, "approved");
     return;
   }
-  await api.post(`/stock-transfers/${id}/approve`);
+  await api.post(`/stock-transfers/${id}/approve`, undefined, {
+    timeout: DECISION_TIMEOUT_MS,
+  });
 }
 
 /** POST /stock-transfers/{id}/reject */
@@ -253,5 +259,7 @@ export async function declineTransfer(id: string): Promise<void> {
     setLocalTransferStatus(id, "declined");
     return;
   }
-  await api.post(`/stock-transfers/${id}/reject`);
+  await api.post(`/stock-transfers/${id}/reject`, undefined, {
+    timeout: DECISION_TIMEOUT_MS,
+  });
 }

@@ -185,17 +185,20 @@ export default function TransfersScreen() {
     router.push({ pathname: '/transfer/[id]', params: { id: 'new', redoFrom: id } });
   }
 
-  async function decide(id: string, next: TransferStatus) {
+  // Resolves true on success; the sheet then finishes its progress bar and
+  // closes itself via onClose.
+  async function decide(id: string, next: TransferStatus): Promise<boolean> {
     try {
       if (next === 'approved') await approveTransfer(id);
       else await declineTransfer(id);
-      closeDetail();
       load(search, status, 1, false);
+      return true;
     } catch (e) {
       Alert.alert(
         t('transfers.updateFailedTitle'),
         e instanceof Error ? e.message : t('transfers.updateFailedBody'),
       );
+      return false;
     }
   }
 

@@ -574,6 +574,8 @@ export const en = {
   'transferDetails.sendToTelegram': 'Send report to Telegram',
   'transferDetails.statusNote': 'This transfer is {{status}}.',
   'transferDetails.redo': 'Redo transfer',
+  'transferDetails.approving': 'Approving… {{percent}}%',
+  'transferDetails.declining': 'Declining… {{percent}}%',
 
   // Settings screen.
   'settings.title': 'Settings',
@@ -1166,6 +1168,8 @@ export const km: Record<TranslationKey, string> = {
   'transferDetails.sendToTelegram': 'ផ្ញើរបាយការណ៍ទៅ Telegram',
   'transferDetails.statusNote': 'ការផ្ទេរនេះគឺ {{status}}។',
   'transferDetails.redo': 'ធ្វើការផ្ទេរឡើងវិញ',
+  'transferDetails.approving': 'កំពុងអនុម័ត… {{percent}}%',
+  'transferDetails.declining': 'កំពុងបដិសេធ… {{percent}}%',
 
   'settings.title': 'ការកំណត់',
   'settings.guest': 'ភ្ញៀវ',
