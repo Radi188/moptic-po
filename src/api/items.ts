@@ -7,6 +7,8 @@ export type ApiItem = {
   code: string;
   name: string;
   cost: number;
+  /** Price set on the item in inventory. */
+  price: number;
   image?: string;
 };
 
@@ -26,6 +28,8 @@ type RawItem = {
   purchase_cost?: string | number;
   cost?: string | number;
   sale_price?: string | number;
+  item_price?: string | number;
+  price?: string | number;
   image?: string | null;
   thumbnail?: string | null;
 };
@@ -52,6 +56,8 @@ function mapItem(row: RawItem): ApiItem {
     code: row.item_code ?? row.code ?? "",
     name: row.item_name ?? row.name ?? row.item_code ?? row.code ?? "",
     cost: Number(row.purchase_cost ?? row.cost ?? row.sale_price ?? 0) || 0,
+    // '/items/search' sends the selling price as `cost`, not `item_price`.
+    price: Number(row.item_price ?? row.sale_price ?? row.price ?? row.cost ?? 0) || 0,
     image: row.image ?? row.thumbnail ?? undefined,
   };
 }
@@ -89,6 +95,7 @@ const MOCK_ITEMS: ApiItem[] = PRODUCTS.map((p) => ({
   code: p.code,
   name: p.name,
   cost: p.cost,
+  price: p.cost,
 }));
 
 /** GET /items?page= (paginated). */
@@ -98,6 +105,49 @@ export async function fetchItems(page = 1): Promise<ItemsPage> {
   const result = mapPage(data);
 
   return result;
+}
+
+export type ItemRef = { id: string; code: string };
+
+/** How many item lookups run at once, so large transfers don't hit rate limits. */
+const PRICE_LOOKUP_BATCH = 5;
+
+/** GET /items/{id}, falling back to an exact-code search. 0 when neither has a price. */
+async function fetchItemPrice({ id, code }: ItemRef): Promise<number> {
+  try {
+    const { data } = await api.get<RawItem & { data?: RawItem; item?: RawItem }>(
+      `/items/${id}`,
+    );
+    const price = mapItem(data.data ?? data.item ?? data).price;
+    if (price > 0) return price;
+    if (__DEV__) console.warn(`[report] item ${id} has no price:`, Object.keys(data));
+  } catch (e) {
+    if (__DEV__) console.warn(`[report] item ${id} lookup failed:`, e);
+  }
+  if (!code) return 0;
+  try {
+    const { items } = await searchItems(code);
+    return items.find((i) => i.code === code)?.price ?? 0;
+  } catch (e) {
+    if (__DEV__) console.warn(`[report] item ${code} search failed:`, e);
+    return 0;
+  }
+}
+
+/** Inventory prices keyed by item id. Items with no price found are left out. */
+export async function fetchItemPrices(refs: ItemRef[]): Promise<Map<string, number>> {
+  const prices = new Map<string, number>();
+  if (!isApiConfigured()) return prices;
+  const unique = [...new Map(refs.filter((r) => r.id).map((r) => [r.id, r])).values()];
+  for (let i = 0; i < unique.length; i += PRICE_LOOKUP_BATCH) {
+    await Promise.all(
+      unique.slice(i, i + PRICE_LOOKUP_BATCH).map(async (ref) => {
+        const price = await fetchItemPrice(ref);
+        if (price > 0) prices.set(ref.id, price);
+      }),
+    );
+  }
+  return prices;
 }
 
 /** Body for POST /items (relative to /api/v1/staff) — create a product. */

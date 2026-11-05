@@ -15,7 +15,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { fetchBranchSales, type SoldItem } from '@/api/daily-sales';
-import { type ApiItem } from '@/api/items';
+import { fetchItemPrices, type ApiItem } from '@/api/items';
 import { getWarehouses, type ApiOption } from '@/api/purchase-orders';
 import { fetchWarehouseStockMap } from '@/api/stock-on-hand';
 import { createTransfer, type CreateTransferBody } from '@/api/transfers';
@@ -130,8 +130,7 @@ export default function BranchRefillScreen() {
     setLoading(true);
     fetchBranchSales({ date: params.date, branchId: params.branchId })
       .then((result) => {
-        // Sort sold items A–Z by name so both the on-screen list and the
-        // Telegram refill report (derived from `rows`) come out alphabetical.
+        // Sort sold items A–Z by name for the on-screen list.
         if (active) {
           setRows(
             [...result.items].sort((a, b) =>
@@ -171,7 +170,7 @@ export default function BranchRefillScreen() {
   const available = (itemId: string) => stock[itemId] ?? 0;
 
   // Sold items first, then any items the user added manually (kept at the
-  // bottom of the on-screen list). The Telegram report sorts them A–Z instead.
+  // bottom of the on-screen list). The Telegram report sorts by item code instead.
   const allRows = useMemo(() => [...rows, ...extraItems], [rows, extraItems]);
 
   const selectedCount = useMemo(
@@ -307,13 +306,12 @@ export default function BranchRefillScreen() {
       return;
     }
     try {
-      // Sort the report A–Z by item name (sold + manually added interleaved),
-      // even though the on-screen list keeps added items at the bottom.
-      const reportRows = [...items]
-        .sort((a, b) =>
-          a.row.itemName.localeCompare(b.row.itemName, undefined, { sensitivity: 'base' }),
-        )
-        .map(({ row, qty }) => toReportRow(row.itemName, row.qtySold, qty));
+      const prices = await fetchItemPrices(
+        items.map(({ row }) => ({ id: row.itemId, code: row.itemCode })),
+      );
+      const reportRows = items.map(({ row, qty }) =>
+        toReportRow(row.itemCode || row.itemName, row.qtySold, qty, prices.get(row.itemId)),
+      );
       const uri = await generateRefillReportPdf(reportRows, {
         branchName: params.branchName || `Branch ${params.branchId}`,
         sourceName: params.sourceName,

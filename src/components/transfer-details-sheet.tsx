@@ -5,6 +5,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fetchBranchSales } from '@/api/daily-sales';
+import { fetchItemPrices } from '@/api/items';
 import { Skeleton, SkeletonRows } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -283,13 +284,6 @@ async function buildTransferReport(
     try {
       const sales = await fetchBranchSales({ date: salesDate, branchId: branch.id });
       if (sales.items.length > 0) {
-        const soldRows = sales.items.map((s) =>
-          toReportRow(
-            s.itemName,
-            s.qtySold,
-            transferredQty.get(s.itemId) ?? transferredQty.get(s.itemCode) ?? 0,
-          ),
-        );
         // Sold items don't cover manually-added stock (new items that weren't
         // sold that day). Append any transferred item not in the sales list so
         // the report matches the transfer, not just the day's sales.
@@ -298,13 +292,28 @@ async function buildTransferReport(
           if (s.itemId) soldKeys.add(s.itemId);
           if (s.itemCode) soldKeys.add(s.itemCode);
         }
-        const extraRows = transfer.items
-          .filter(
-            (it) =>
-              !(it.itemId && soldKeys.has(it.itemId)) &&
-              !(it.itemCode && soldKeys.has(it.itemCode)),
-          )
-          .map((it) => toReportRow(it.itemName, 0, it.qty));
+        const extraItems = transfer.items.filter(
+          (it) =>
+            !(it.itemId && soldKeys.has(it.itemId)) &&
+            !(it.itemCode && soldKeys.has(it.itemCode)),
+        );
+        // The report shows the inventory price, which neither sales nor transfer
+        // lines carry, so look it up from the item itself.
+        const prices = await fetchItemPrices([
+          ...sales.items.map((s) => ({ id: s.itemId, code: s.itemCode })),
+          ...extraItems.map((it) => ({ id: it.itemId, code: it.itemCode })),
+        ]);
+        const soldRows = sales.items.map((s) =>
+          toReportRow(
+            s.itemCode || s.itemName,
+            s.qtySold,
+            transferredQty.get(s.itemId) ?? transferredQty.get(s.itemCode) ?? 0,
+            prices.get(s.itemId),
+          ),
+        );
+        const extraRows = extraItems.map((it) =>
+          toReportRow(it.itemCode || it.itemName, 0, it.qty, prices.get(it.itemId)),
+        );
         rows = [...soldRows, ...extraRows];
       }
     } catch {
@@ -312,7 +321,12 @@ async function buildTransferReport(
     }
   }
   if (!rows) {
-    rows = transfer.items.map((it) => toReportRow(it.itemName, it.qty, it.qty));
+    const prices = await fetchItemPrices(
+      transfer.items.map((it) => ({ id: it.itemId, code: it.itemCode })),
+    );
+    rows = transfer.items.map((it) =>
+      toReportRow(it.itemCode || it.itemName, it.qty, it.qty, prices.get(it.itemId)),
+    );
   }
 
   const reportMeta = {

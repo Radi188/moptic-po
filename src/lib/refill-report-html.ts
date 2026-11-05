@@ -3,12 +3,15 @@
  * branch paper form). Kept free of native imports so it can be unit-tested /
  * previewed outside the app; expo-print rendering lives in refill-report.ts.
  */
+import { formatMoney } from '@/data/purchase-orders';
 import { REPORT_LOGO_DATA_URI } from '@/lib/brand-logo';
 
 const STORE_NAME = 'ហាងវ៉ែនតា អឺម អុបទិក';
 
 export type RefillReportRow = {
-  productName: string;
+  itemCode: string;
+  /** Price set on the item in inventory (not the invoice price); 0 when unknown. */
+  price: number;
   /** Quantity the branch sold that day ("stock branch sale"). */
   branchSale: number;
   /** Quantity sent out from the source warehouse. */
@@ -36,13 +39,15 @@ export type RefillReportMeta = {
 
 /** Derive a report row from the sold qty and the qty being transferred out. */
 export function toReportRow(
-  productName: string,
+  itemCode: string,
   branchSale: number,
   transferOut: number,
+  price = 0,
 ): RefillReportRow {
   const diff = branchSale - transferOut;
   return {
-    productName,
+    itemCode,
+    price,
     branchSale,
     transferOut,
     branchToGet: transferOut,
@@ -59,7 +64,8 @@ function esc(value: string | number) {
 
 /** Khmer-only column headers, matching the paper control sheet. */
 const COLUMNS = [
-  'ប្រភេទទំនិញ',
+  'លេខកូដទំនិញ',
+  'តម្លៃ',
   'ស្តុកលក់សាខា',
   'ស្តុកផ្ញើចេញ',
   'ស្តុកសាខាទទួល',
@@ -69,12 +75,12 @@ const COLUMNS = [
 ];
 
 /**
- * Grouping key: the product name's first 5 letters, lowercased with spaces
- * stripped so "Ray Ban" and "RayBan" group together. Names shorter than 5
+ * Grouping key: the item code's first 5 letters, lowercased with spaces
+ * stripped so "Ray Ban" and "RayBan" group together. Codes shorter than 5
  * letters use whatever they have.
  */
-function groupKey(name: string) {
-  return name.replace(/\s+/g, '').toLowerCase().slice(0, 5);
+function groupKey(code: string) {
+  return code.replace(/\s+/g, '').toLowerCase().slice(0, 5);
 }
 
 type Totals = { sale: number; out: number; get: number; less: number; over: number };
@@ -95,15 +101,18 @@ function sumRows(rows: RefillReportRow[]): Totals {
 export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillReportMeta) {
   const cell = (n: number) => (n > 0 ? String(n) : '–');
 
-  // Group rows whose product names share the same first 5 letters. Order the
-  // groups by that key, keeping the incoming (already A–Z by name) order within
-  // each group. `label` shows the shared prefix taken from the first product.
+  // Group rows whose item codes share the same first 5 letters. Order the groups
+  // by that key, with rows A–Z by code within each group. `label` shows the
+  // shared prefix taken from the first item.
+  const sorted = [...rows].sort((a, b) =>
+    a.itemCode.localeCompare(b.itemCode, undefined, { sensitivity: 'base' }),
+  );
   const groups = new Map<string, { label: string; rows: RefillReportRow[] }>();
-  for (const r of rows) {
-    const key = groupKey(r.productName);
+  for (const r of sorted) {
+    const key = groupKey(r.itemCode);
     const g = groups.get(key);
     if (g) g.rows.push(r);
-    else groups.set(key, { label: r.productName.trim().slice(0, 5), rows: [r] });
+    else groups.set(key, { label: r.itemCode.trim().slice(0, 5), rows: [r] });
   }
   const keys = [...groups.keys()].sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: 'base' }),
@@ -112,7 +121,8 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
   const itemRow = (r: RefillReportRow, i: number) => `
       <tr>
         <td class="num">${i}</td>
-        <td class="name">${esc(r.productName)}</td>
+        <td class="name">${esc(r.itemCode)}</td>
+        <td class="price">${r.price > 0 ? esc(formatMoney(r.price)) : '–'}</td>
         <td>${esc(r.branchSale)}</td>
         <td>${esc(r.transferOut)}</td>
         <td>${esc(r.branchToGet)}</td>
@@ -134,7 +144,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       <tr class="cat">
         <td></td>
         <td class="name">${esc(label)}…</td>
-        <td colspan="6">${groupRows.length} មុខទំនិញ</td>
+        <td colspan="7">${groupRows.length} មុខទំនិញ</td>
       </tr>`
         : '';
       const items = groupRows.map((r) => itemRow(r, (n += 1))).join('');
@@ -143,6 +153,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       <tr class="subtotal">
         <td></td>
         <td class="label">សរុបក្រុម</td>
+        <td></td>
         <td>${st.sale}</td>
         <td>${st.out}</td>
         <td>${st.get}</td>
@@ -183,6 +194,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       th .en { font-weight: 400; font-size: 9px; opacity: 0.8; }
       td.num { width: 28px; color: #888; }
       td.name { text-align: left; }
+      td.price { white-space: nowrap; }
       td.warn { color: #c0392b; font-weight: 700; }
       td.muted { color: #bbb; }
       tr.cat td { background: #e8eaf2; font-weight: 700; text-align: left; }
@@ -224,6 +236,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
         <tr>
           <td></td>
           <td class="label">សរុប</td>
+          <td></td>
           <td>${totals.sale}</td>
           <td>${totals.out}</td>
           <td>${totals.get}</td>
