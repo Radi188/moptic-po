@@ -66,7 +66,7 @@ export async function exportInventory(
   const file = new File(Paths.cache, `${baseName}.xls`);
   if (file.exists) file.delete();
   file.create();
-  file.write(html);
+  await file.write(html);
   await Sharing.shareAsync(file.uri, {
     mimeType: "application/vnd.ms-excel",
     UTI: "com.microsoft.excel.xls",

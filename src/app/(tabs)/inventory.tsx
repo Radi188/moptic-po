@@ -319,7 +319,7 @@ export default function InventoryScreen() {
             <View style={styles.footer}>
               <ActivityIndicator color={theme.textSecondary} />
             </View>
-          ) : null
+          ) : undefined
         }
       />
 

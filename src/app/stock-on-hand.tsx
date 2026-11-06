@@ -386,7 +386,7 @@ export default function StockOnHandScreen() {
             <View style={styles.footer}>
               <ActivityIndicator color={theme.textSecondary} />
             </View>
-          ) : null
+          ) : undefined
         }
       />
 

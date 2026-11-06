@@ -362,7 +362,7 @@ export default function SaleSummaryReportScreen() {
                 <StatCard key={stat.key} stat={stat} />
               ))}
             </View>
-          ) : null
+          ) : undefined
         }
         renderItem={({ item }) => (
           <CategorySection
@@ -390,7 +390,7 @@ export default function SaleSummaryReportScreen() {
             </View>
           ) : error && categories.length > 0 ? (
             <ErrorState message={error} onRetry={retry} theme={theme} />
-          ) : null
+          ) : undefined
         }
       />
 

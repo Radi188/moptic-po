@@ -7,7 +7,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/4c4ede3a-dcdd-4872-bfdc-3f7095b81857"
+      "url": "https://u.expo.dev/4c4ede3a-dcdd-4872-bfdc-3f7095b81857",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "orientation": "portrait",
     "icon": "./assets/images/logo-staff.png",

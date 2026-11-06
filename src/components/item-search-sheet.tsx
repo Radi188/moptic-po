@@ -146,7 +146,7 @@ export function ItemSearchSheet({ visible, selectedCodes, onAdd, onClose }: Prop
                   <View style={styles.footer}>
                     <ActivityIndicator color={theme.textSecondary} />
                   </View>
-                ) : null
+                ) : undefined
               }
             />
           )}

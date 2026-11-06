@@ -496,7 +496,7 @@ export default function PurchaseOrdersScreen() {
             <View style={styles.footer}>
               <ActivityIndicator color={theme.tint} />
             </View>
-          ) : null
+          ) : undefined
         }
       />
 

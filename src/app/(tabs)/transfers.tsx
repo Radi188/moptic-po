@@ -312,7 +312,7 @@ export default function TransfersScreen() {
             <View style={styles.footer}>
               <ActivityIndicator color={theme.textSecondary} />
             </View>
-          ) : null
+          ) : undefined
         }
       />
 
