@@ -22,6 +22,8 @@ export type RefillReportRow = {
   less: number;
   /** Surplus: transferOut - branchSale when positive, else 0. */
   over: number;
+  /** Note staff wrote on the day's invoice lines; empty when there is none. */
+  note: string;
 };
 
 export type RefillReportMeta = {
@@ -43,6 +45,7 @@ export function toReportRow(
   branchSale: number,
   transferOut: number,
   price = 0,
+  note = '',
 ): RefillReportRow {
   const diff = branchSale - transferOut;
   return {
@@ -53,7 +56,33 @@ export function toReportRow(
     branchToGet: transferOut,
     less: diff > 0 ? diff : 0,
     over: diff < 0 ? -diff : 0,
+    note,
   };
+}
+
+/**
+ * One row per distinct note, plus a plain row for any qty sold without a note.
+ * The transfer-out qty fills each row up to what it sold; anything left over goes
+ * on the last row, so the rows always add up to the item's totals.
+ */
+export function toReportRows(
+  itemCode: string,
+  branchSale: number,
+  transferOut: number,
+  price = 0,
+  notes: { note: string; qty: number }[] = [],
+): RefillReportRow[] {
+  const noted = notes.reduce((sum, n) => sum + n.qty, 0);
+  const parts = [...notes];
+  if (branchSale > noted || parts.length === 0) {
+    parts.push({ note: '', qty: Math.max(branchSale - noted, 0) });
+  }
+  let left = transferOut;
+  return parts.map(({ note, qty }, i) => {
+    const out = i === parts.length - 1 ? left : Math.min(left, qty);
+    left -= out;
+    return toReportRow(itemCode, qty, out, price, note);
+  });
 }
 
 function esc(value: string | number) {
@@ -71,7 +100,7 @@ const COLUMNS = [
   'ស្តុកសាខាទទួល',
   'ខ្វះ',
   'លើស',
-  'ឈ្មោះ BM',
+  'កំណត់សម្គាល់',
 ];
 
 /**
@@ -128,7 +157,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
         <td>${esc(r.branchToGet)}</td>
         <td class="${r.less > 0 ? 'warn' : 'muted'}">${cell(r.less)}</td>
         <td class="${r.over > 0 ? 'warn' : 'muted'}">${cell(r.over)}</td>
-        <td>${esc(meta.bmName || '–')}</td>
+        <td class="note">${esc(r.note || '–')}</td>
       </tr>`;
 
   let n = 0;
@@ -144,7 +173,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       <tr class="cat">
         <td></td>
         <td class="name">${esc(label)}…</td>
-        <td colspan="7">${groupRows.length} មុខទំនិញ</td>
+        <td colspan="7">${new Set(groupRows.map((r) => r.itemCode)).size} មុខទំនិញ</td>
       </tr>`
         : '';
       const items = groupRows.map((r) => itemRow(r, (n += 1))).join('');
@@ -195,6 +224,7 @@ export function buildRefillReportHtml(rows: RefillReportRow[], meta: RefillRepor
       td.num { width: 28px; color: #888; }
       td.name { text-align: left; }
       td.price { white-space: nowrap; }
+      td.note { text-align: left; }
       td.warn { color: #c0392b; font-weight: 700; }
       td.muted { color: #bbb; }
       tr.cat td { background: #e8eaf2; font-weight: 700; text-align: left; }

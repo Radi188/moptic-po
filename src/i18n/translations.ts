@@ -319,6 +319,8 @@ export const en = {
   // Stock Refill.
   'refill.loadError': 'Failed to load daily sales.',
   'refill.loadSalesError': 'Failed to load sales.',
+  'refill.notesLoading': 'Loading item notes…',
+  'refill.notesFailed': 'Item notes could not load. Tap to try again.',
   'refill.selectSourceFirst': 'Please select a source warehouse first.',
   'refill.selectDestFirst': 'Select a destination warehouse first.',
   'refill.sameWarehouse': 'Source and destination warehouses are the same.',
@@ -921,6 +923,8 @@ export const km: Record<TranslationKey, string> = {
 
   'refill.loadError': 'មិនអាចផ្ទុកការលក់ប្រចាំថ្ងៃបានទេ។',
   'refill.loadSalesError': 'មិនអាចផ្ទុកការលក់បានទេ។',
+  'refill.notesLoading': 'កំពុងផ្ទុកកំណត់សម្គាល់ទំនិញ…',
+  'refill.notesFailed': 'មិនអាចផ្ទុកកំណត់សម្គាល់ទំនិញបានទេ។ ចុចដើម្បីព្យាយាមម្តងទៀត។',
   'refill.selectSourceFirst': 'សូមជ្រើសរើសឃ្លាំងប្រភពជាមុនសិន។',
   'refill.selectDestFirst': 'សូមជ្រើសរើសឃ្លាំងគោលដៅជាមុនសិន។',
   'refill.sameWarehouse': 'ឃ្លាំងប្រភព និងឃ្លាំងគោលដៅដូចគ្នា។',

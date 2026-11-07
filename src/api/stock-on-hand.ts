@@ -56,6 +56,7 @@ type RawItem = {
   current_stock?: string | number;
   purchase_cost?: string | number;
   cost?: string | number;
+  item_price?: string | number;
   sale_price?: string | number;
   selling_price?: string | number;
   price?: string | number;
@@ -117,7 +118,7 @@ function mapItem(row: RawItem): StockOnHandItem {
     warehouseId: String(row.warehouse_id ?? ''),
     qty,
     cost,
-    price: num(row.sale_price ?? row.selling_price ?? row.price),
+    price: num(row.item_price ?? row.sale_price ?? row.selling_price ?? row.price),
     value: num(row.stock_value ?? row.total_cost) || cost * qty,
     reorderLevel: num(row.alert_stock ?? row.alert_qty ?? row.reorder_level ?? row.min_qty),
     isLowStock: row.is_low_stock === true || row.is_low_stock === 1 || row.is_low_stock === '1',
@@ -186,17 +187,23 @@ export async function fetchStockOnHand({
 }
 
 /**
- * Builds an item_id → on-hand qty map for a warehouse (in-stock items only).
+ * Builds item_id → on-hand qty and inventory price maps for a warehouse
+ * (in-stock items only).
  * Fetches page 1, then the remaining pages in parallel (capped for safety).
  */
-export async function fetchWarehouseStockMap(
+export async function fetchWarehouseStock(
   warehouseId: string,
-): Promise<Record<string, number>> {
+): Promise<{ qty: Record<string, number>; prices: Record<string, number> }> {
   const PER_PAGE = 500;
   const MAX_PAGES = 40;
-  const map: Record<string, number> = {};
+  const qty: Record<string, number> = {};
+  const prices: Record<string, number> = {};
   const add = (items: StockOnHandItem[]) => {
-    for (const it of items) if (it.id) map[it.id] = it.qty;
+    for (const it of items) {
+      if (!it.id) continue;
+      qty[it.id] = it.qty;
+      prices[it.id] = it.price;
+    }
   };
 
   // The backend rate-limits (HTTP 429) bursts of parallel requests, so fetch the
@@ -220,7 +227,7 @@ export async function fetchWarehouseStockMap(
     );
     for (const pg of results) if (pg) add(pg.items);
   }
-  return map;
+  return { qty, prices };
 }
 
 export type ItemWarehouseStock = {

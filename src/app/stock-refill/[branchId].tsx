@@ -14,10 +14,15 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
-import { fetchBranchSales, type SoldItem } from '@/api/daily-sales';
+import {
+  fetchBranchItemNotes,
+  fetchBranchSales,
+  type ItemNote,
+  type SoldItem,
+} from '@/api/daily-sales';
 import { fetchItemPrices, type ApiItem } from '@/api/items';
 import { getWarehouses, type ApiOption } from '@/api/purchase-orders';
-import { fetchWarehouseStockMap } from '@/api/stock-on-hand';
+import { fetchWarehouseStock } from '@/api/stock-on-hand';
 import { createTransfer, type CreateTransferBody } from '@/api/transfers';
 import { ItemSearchSheet } from '@/components/item-search-sheet';
 import { OptionSheet } from '@/components/option-sheet';
@@ -31,7 +36,7 @@ import { SkeletonList } from '@/components/skeleton';
 import { useTranslation } from '@/contexts/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/hooks/use-theme';
-import { generateRefillReportPdf, toReportRow } from '@/lib/refill-report';
+import { generateRefillReportPdf, toReportRows } from '@/lib/refill-report';
 import { isTelegramConfigured, sendTelegramDocument } from '@/lib/telegram';
 
 const BRAND = '#232843';
@@ -93,6 +98,10 @@ export default function BranchRefillScreen() {
   const [bmName, setBmName] = useState('');
   const [deliveryPerson, setDeliveryPerson] = useState('');
   const [stock, setStock] = useState<Record<string, number>>({});
+  const [stockPrices, setStockPrices] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState<Record<string, ItemNote[]>>({});
+  const [notesStatus, setNotesStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [notesAttempt, setNotesAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [stockLoading, setStockLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,13 +159,35 @@ export default function BranchRefillScreen() {
     };
   }, [params.date, params.branchId, t]);
 
+  // Notes from the day's invoice lines. Optional extra detail, so a failure here
+  // leaves the refill flow working without them.
+  useEffect(() => {
+    let active = true;
+    setNotesStatus('loading');
+    fetchBranchItemNotes({ date: params.date, branchId: params.branchId })
+      .then((result) => {
+        if (!active) return;
+        setNotes(result);
+        setNotesStatus('ready');
+      })
+      .catch((e) => {
+        if (__DEV__) console.warn('[refill] item notes failed to load:', e);
+        if (active) setNotesStatus('failed');
+      });
+    return () => {
+      active = false;
+    };
+  }, [params.date, params.branchId, notesAttempt]);
+
   // On-hand quantities in the source warehouse (what's available to transfer out).
   useEffect(() => {
     let active = true;
     setStockLoading(true);
-    fetchWarehouseStockMap(params.sourceId)
-      .then((map) => {
-        if (active) setStock(map);
+    fetchWarehouseStock(params.sourceId)
+      .then(({ qty, prices }) => {
+        if (!active) return;
+        setStock(qty);
+        setStockPrices(prices);
       })
       .catch(() => {})
       .finally(() => {
@@ -306,11 +337,27 @@ export default function BranchRefillScreen() {
       return;
     }
     try {
+      // Notes may still be loading, or have failed earlier: try once more so the
+      // report doesn't go out without them.
+      const reportNotes =
+        notesStatus === 'ready'
+          ? notes
+          : await fetchBranchItemNotes({ date: params.date, branchId: params.branchId }).catch(
+              () => notes,
+            );
+      // The stock list already carries inventory prices. Only items the source
+      // warehouse doesn't hold need a lookup, which keeps us under the rate limit.
       const prices = await fetchItemPrices(
-        items.map(({ row }) => ({ id: row.itemId, code: row.itemCode })),
+        items.map(({ row }) => row.itemId).filter((id) => !stockPrices[id]),
       );
-      const reportRows = items.map(({ row, qty }) =>
-        toReportRow(row.itemCode || row.itemName, row.qtySold, qty, prices.get(row.itemId)),
+      const reportRows = items.flatMap(({ row, qty }) =>
+        toReportRows(
+          row.itemCode || row.itemName,
+          row.qtySold,
+          qty,
+          stockPrices[row.itemId] || prices.get(row.itemId),
+          reportNotes[row.itemId],
+        ),
       );
       const uri = await generateRefillReportPdf(reportRows, {
         branchName: params.branchName || `Branch ${params.branchId}`,
@@ -350,6 +397,7 @@ export default function BranchRefillScreen() {
       value={qtys[row.itemId] ?? ''}
       available={available(row.itemId)}
       stockLoading={stockLoading}
+      notes={notes[row.itemId]}
       onChange={(v) => setQty(row.itemId, v)}
       onRemove={
         extraItems.some((r) => r.itemId === row.itemId) ? () => removeItem(row.itemId) : undefined
@@ -460,6 +508,28 @@ export default function BranchRefillScreen() {
             )}
           </View>
 
+          {notesStatus !== 'ready' && rows.length > 0 ? (
+            <Pressable
+              disabled={notesStatus === 'loading'}
+              onPress={() => setNotesAttempt((n) => n + 1)}
+              style={styles.notesStatus}>
+              <Ionicons
+                name={notesStatus === 'failed' ? 'refresh' : 'document-text-outline'}
+                size={isTablet ? 16 : 12}
+                color={notesStatus === 'failed' ? '#e5484d' : theme.textSecondary}
+                style={styles.noteIcon}
+              />
+              <ThemedText
+                type="small"
+                style={[
+                  styles.noteText,
+                  { color: notesStatus === 'failed' ? '#e5484d' : theme.textSecondary },
+                ]}>
+                {t(notesStatus === 'failed' ? 'refill.notesFailed' : 'refill.notesLoading')}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+
           {loading ? (
             <SkeletonList />
           ) : allRows.length === 0 ? (
@@ -545,6 +615,7 @@ function ItemRow({
   value,
   available,
   stockLoading,
+  notes,
   onChange,
   onRemove,
   divider,
@@ -555,6 +626,7 @@ function ItemRow({
   value: string;
   available: number;
   stockLoading: boolean;
+  notes?: ItemNote[];
   onChange: (v: string) => void;
   onRemove?: () => void;
   divider: boolean;
@@ -610,6 +682,21 @@ function ItemRow({
             </ThemedText>
           </View>
         </View>
+        {notes?.map(({ note }) => (
+          <View key={note} style={styles.noteRow}>
+            <Ionicons
+              name="document-text-outline"
+              size={isTablet ? 16 : 12}
+              color={theme.tint}
+              style={styles.noteIcon}
+            />
+            <ThemedText
+              type="small"
+              style={[styles.noteText, { color: theme.tint }, isTablet && styles.metaTextTablet]}>
+              {note}
+            </ThemedText>
+          </View>
+        ))}
       </View>
       <ThemedView
         type="background"
@@ -743,6 +830,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.half,
+  },
+  noteRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.half,
+    marginTop: Spacing.half,
+  },
+  notesStatus: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.half,
+    paddingVertical: Spacing.one,
+  },
+  noteIcon: {
+    marginTop: 2,
+  },
+  noteText: {
+    flex: 1,
   },
   qtyInputWrap: {
     width: 64,

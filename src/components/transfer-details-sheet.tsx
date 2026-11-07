@@ -4,7 +4,7 @@ import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Vie
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fetchBranchSales } from '@/api/daily-sales';
+import { fetchBranchItemNotes, fetchBranchSales, type ItemNote } from '@/api/daily-sales';
 import { fetchItemPrices } from '@/api/items';
 import { Skeleton, SkeletonRows } from '@/components/skeleton';
 import { ThemedText } from '@/components/themed-text';
@@ -13,7 +13,11 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/contexts/auth';
 import { useTranslation } from '@/contexts/i18n';
 import { useTheme } from '@/hooks/use-theme';
-import { generateRefillReportPdf, toReportRow } from '@/lib/refill-report';
+import {
+  generateRefillReportPdf,
+  toReportRows,
+  type RefillReportRow,
+} from '@/lib/refill-report';
 import { isTelegramConfigured, sendTelegramDocument } from '@/lib/telegram';
 import {
   canEditTransfer,
@@ -279,7 +283,14 @@ async function buildTransferReport(
     if (it.itemCode) transferredQty.set(it.itemCode, it.qty);
   }
 
-  let rows: ReturnType<typeof toReportRow>[] | null = null;
+  // Notes are optional detail, so a failure here still sends the report.
+  const notes = branch
+    ? await fetchBranchItemNotes({ date: salesDate, branchId: branch.id }).catch(
+        (): Record<string, ItemNote[]> => ({}),
+      )
+    : {};
+
+  let rows: RefillReportRow[] | null = null;
   if (branch) {
     try {
       const sales = await fetchBranchSales({ date: salesDate, branchId: branch.id });
@@ -300,19 +311,20 @@ async function buildTransferReport(
         // The report shows the inventory price, which neither sales nor transfer
         // lines carry, so look it up from the item itself.
         const prices = await fetchItemPrices([
-          ...sales.items.map((s) => ({ id: s.itemId, code: s.itemCode })),
-          ...extraItems.map((it) => ({ id: it.itemId, code: it.itemCode })),
+          ...sales.items.map((s) => s.itemId),
+          ...extraItems.map((it) => it.itemId),
         ]);
-        const soldRows = sales.items.map((s) =>
-          toReportRow(
+        const soldRows = sales.items.flatMap((s) =>
+          toReportRows(
             s.itemCode || s.itemName,
             s.qtySold,
             transferredQty.get(s.itemId) ?? transferredQty.get(s.itemCode) ?? 0,
             prices.get(s.itemId),
+            notes[s.itemId],
           ),
         );
-        const extraRows = extraItems.map((it) =>
-          toReportRow(it.itemCode || it.itemName, 0, it.qty, prices.get(it.itemId)),
+        const extraRows = extraItems.flatMap((it) =>
+          toReportRows(it.itemCode || it.itemName, 0, it.qty, prices.get(it.itemId), notes[it.itemId]),
         );
         rows = [...soldRows, ...extraRows];
       }
@@ -321,11 +333,15 @@ async function buildTransferReport(
     }
   }
   if (!rows) {
-    const prices = await fetchItemPrices(
-      transfer.items.map((it) => ({ id: it.itemId, code: it.itemCode })),
-    );
-    rows = transfer.items.map((it) =>
-      toReportRow(it.itemCode || it.itemName, it.qty, it.qty, prices.get(it.itemId)),
+    const prices = await fetchItemPrices(transfer.items.map((it) => it.itemId));
+    rows = transfer.items.flatMap((it) =>
+      toReportRows(
+        it.itemCode || it.itemName,
+        it.qty,
+        it.qty,
+        prices.get(it.itemId),
+        notes[it.itemId],
+      ),
     );
   }
 

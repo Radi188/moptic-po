@@ -10,7 +10,7 @@ import {
   type RefillReportRow,
 } from '@/lib/refill-report-html';
 
-export { toReportRow } from '@/lib/refill-report-html';
+export { toReportRows } from '@/lib/refill-report-html';
 export type { RefillReportMeta, RefillReportRow } from '@/lib/refill-report-html';
 
 /** Render the report to a PDF and return the local file uri. */

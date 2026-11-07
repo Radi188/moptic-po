@@ -43,6 +43,10 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+// Optional lookups: a 401 here means this endpoint is off limits to the account,
+// not that the session expired, so it must not sign the user out.
+const NO_SIGN_OUT_ON_401 = new Set(["/sales/invoices"]);
+
 // If the token is rejected, clear it so the app can return to login.
 api.interceptors.response.use(
   (response) => {
@@ -55,7 +59,10 @@ api.interceptors.response.use(
     if (__DEV__) {
       logTiming(error.config, error.response?.status, error.code);
     }
-    if (error.response?.status === 401) {
+    if (
+      error.response?.status === 401 &&
+      !NO_SIGN_OUT_ON_401.has(error.config?.url ?? "")
+    ) {
       await tokenStore.clear();
       onUnauthorized?.();
     }

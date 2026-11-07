@@ -1,4 +1,4 @@
-import { api } from "@/api/client";
+import { api, ApiError } from "@/api/client";
 import { isApiConfigured } from "@/api/config";
 import { PRODUCTS } from "@/data/purchase-orders";
 
@@ -107,43 +107,46 @@ export async function fetchItems(page = 1): Promise<ItemsPage> {
   return result;
 }
 
-export type ItemRef = { id: string; code: string };
-
-/** How many item lookups run at once, so large transfers don't hit rate limits. */
+/** How many item lookups run at once. */
 const PRICE_LOOKUP_BATCH = 5;
+/** The API allows 60 requests a minute, so retries span one full window. */
+const RATE_LIMIT_WAIT_MS = 15000;
+const RATE_LIMIT_RETRIES = 4;
 
-/** GET /items/{id}, falling back to an exact-code search. 0 when neither has a price. */
-async function fetchItemPrice({ id, code }: ItemRef): Promise<number> {
-  try {
-    const { data } = await api.get<RawItem & { data?: RawItem; item?: RawItem }>(
-      `/items/${id}`,
-    );
-    const price = mapItem(data.data ?? data.item ?? data).price;
-    if (price > 0) return price;
-    if (__DEV__) console.warn(`[report] item ${id} has no price:`, Object.keys(data));
-  } catch (e) {
-    if (__DEV__) console.warn(`[report] item ${id} lookup failed:`, e);
-  }
-  if (!code) return 0;
-  try {
-    const { items } = await searchItems(code);
-    return items.find((i) => i.code === code)?.price ?? 0;
-  } catch (e) {
-    if (__DEV__) console.warn(`[report] item ${code} search failed:`, e);
-    return 0;
+/** GET /items/{id} — the inventory price, or 0 when it can't be read. */
+async function fetchItemPrice(id: string): Promise<number> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const { data } = await api.get<RawItem & { data?: RawItem; item?: RawItem }>(
+        `/items/${id}`,
+      );
+      const price = mapItem(data.data ?? data.item ?? data).price;
+      if (__DEV__ && price <= 0) console.warn(`[report] item ${id} has no price`);
+      return price;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 429 && attempt < RATE_LIMIT_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_WAIT_MS));
+        continue;
+      }
+      if (__DEV__) console.warn(`[report] item ${id} lookup failed:`, e);
+      return 0;
+    }
   }
 }
 
-/** Inventory prices keyed by item id. Items with no price found are left out. */
-export async function fetchItemPrices(refs: ItemRef[]): Promise<Map<string, number>> {
+/**
+ * Inventory prices keyed by item id, one request per item, so prefer a bulk
+ * source where there is one. Items with no price found are left out.
+ */
+export async function fetchItemPrices(ids: string[]): Promise<Map<string, number>> {
   const prices = new Map<string, number>();
   if (!isApiConfigured()) return prices;
-  const unique = [...new Map(refs.filter((r) => r.id).map((r) => [r.id, r])).values()];
+  const unique = [...new Set(ids.filter(Boolean))];
   for (let i = 0; i < unique.length; i += PRICE_LOOKUP_BATCH) {
     await Promise.all(
-      unique.slice(i, i + PRICE_LOOKUP_BATCH).map(async (ref) => {
-        const price = await fetchItemPrice(ref);
-        if (price > 0) prices.set(ref.id, price);
+      unique.slice(i, i + PRICE_LOOKUP_BATCH).map(async (id) => {
+        const price = await fetchItemPrice(id);
+        if (price > 0) prices.set(id, price);
       }),
     );
   }
